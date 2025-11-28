@@ -1,0 +1,13 @@
+org/acme/flighcrewscheduling/domain/Flight.class
+org/acme/flighcrewscheduling/solver/FlightCrewSchedulingConstraintProvider.class
+org/acme/flighcrewscheduling/domain/Airport.class
+org/acme/flighcrewscheduling/rest/exception/ScheduleSolverExceptionMapper.class
+org/acme/flighcrewscheduling/rest/FlightCrewSchedulingResource$Job.class
+org/acme/flighcrewscheduling/rest/exception/ErrorInfo.class
+org/acme/flighcrewscheduling/domain/FlightAssignment.class
+org/acme/flighcrewscheduling/rest/DemoDataGenerator.class
+org/acme/flighcrewscheduling/rest/FlightCrewSchedulingDemoResource.class
+org/acme/flighcrewscheduling/rest/FlightCrewSchedulingResource.class
+org/acme/flighcrewscheduling/domain/Employee.class
+org/acme/flighcrewscheduling/domain/FlightCrewSchedule.class
+org/acme/flighcrewscheduling/rest/exception/ScheduleSolverException.class
