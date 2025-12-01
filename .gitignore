@@ -1,0 +1,18 @@
+# Maven build output
+target/
+!target/benchmark/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Quarkus
+*.log
+.quarkus/
