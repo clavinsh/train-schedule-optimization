@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rolling Stock Rostering - Timefold Solver</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="icon" href="https://timefold.ai/uploads/images/Brand-Assets/timefold-solver-logomark.png" type="image/png">
+    <style>
+        :root {
+            --ts-violet-1: #3E00FF;
+            --ts-violet-2: #3423A6;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .hero {
+            background: linear-gradient(135deg, var(--ts-violet-1) 0%, var(--ts-violet-2) 100%);
+            color: white;
+            padding: 3rem 0;
+        }
+        .card {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }
+        .btn-solve {
+            background-color: var(--ts-violet-1);
+            border-color: var(--ts-violet-1);
+            color: white;
+            font-weight: 600;
+            padding: 0.75rem 2rem;
+        }
+        .btn-solve:hover {
+            background-color: var(--ts-violet-2);
+            border-color: var(--ts-violet-2);
+            color: white;
+        }
+        .status-badge {
+            font-size: 0.875rem;
+            padding: 0.5rem 1rem;
+        }
+        .score-display {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        .loading {
+            display: none;
+        }
+        .loading.active {
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="hero">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="display-4">Rolling Stock Rostering</h1>
+                    <p class="lead">Optimāla vilcienu piešķiršana maršrutiem ar Timefold Solver</p>
+                </div>
+                <div class="col-md-4 text-md-end">
+                    <img src="https://timefold.ai/uploads/images/Brand-Assets/timefold-solver-logo.png" 
+                         alt="Timefold Solver" style="max-width: 200px; filter: brightness(0) invert(1);">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+        <!-- Status Card -->
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h5 class="card-title mb-3">Risinātāja statuss</h5>
+                        <div class="mb-3">
+                            <span class="badge status-badge" id="statusBadge">NAV AKTĪVS</span>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-solve btn-lg" id="solveButton" onclick="solve()">
+                                <span id="solveButtonText">Sākt risināšanu</span>
+                                <span class="spinner-border spinner-border-sm loading" id="solveSpinner"></span>
+                            </button>
+                            <button class="btn btn-danger btn-lg" id="stopButton" onclick="stopSolving()" style="display: none;">
+                                <span id="stopButtonText">Apturēt risināšanu</span>
+                                <span class="spinner-border spinner-border-sm loading" id="stopSpinner"></span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <h5 class="card-title mb-3">Rezultāts</h5>
+                        <div class="score-display" id="scoreDisplay">-</div>
+                        <small class="text-muted">
+                            <span id="hardScore" title="Obligātie ierobežojumi (jābūt 0)">Obligātie: -</span> | 
+                            <span id="softScore" title="Optimizācijas mērķis (jo lielāks, jo labāk)">Optimizācija: -</span>
+                        </small>
+                        <div class="mt-2">
+                            <small class="text-muted d-block">
+                                <strong>Obligātie:</strong> Ierobežojumi, kas jāizpilda (0 = ideāli)<br>
+                                <strong>Optimizācija:</strong> Pasažieru skaits un efektivitāte
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Cards -->
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h2 class="text-primary mb-2" id="trainCount">-</h2>
+                        <p class="mb-0">Vilcieni</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h2 class="text-success mb-2" id="stationCount">-</h2>
+                        <p class="mb-0">Stacijas</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h2 class="text-info mb-2" id="routeCount">-</h2>
+                        <p class="mb-0">Maršruti</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h2 class="text-warning mb-2" id="departureCount">-</h2>
+                        <p class="mb-0">Atiešanas</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Display -->
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" id="dataTabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="overview-tab" data-bs-toggle="tab" href="#overview">Overview</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="routes-tab" data-bs-toggle="tab" href="#routes">Maršruti</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="timeline-tab" data-bs-toggle="tab" href="#timeline">Grafiks</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="json-tab" data-bs-toggle="tab" href="#json">JSON Data</a>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="overview">
+                        <div class="row">
+                            <div class="col-lg-5">
+                                <h5>Problēmas apraksts</h5>
+                                <p>Šis projekts optimizē vilcienu piešķiršanu atiešanas laikiem dažādiem maršrutiem izmantojot Timefold Solver.</p>
+                                
+                                <div class="alert alert-info mb-3">
+                                    <strong>Mērķis:</strong> Atrast labāko vilcienu piešķīrumu, kas:
+                                    <ul class="mb-0 mt-2">
+                                        <li>Nerada laika konfliktus (vilciens nevar būt 2 vietās vienlaikus)</li>
+                                        <li>Nepārsniedz vilciena kapacitāti</li>
+                                        <li>Maksimizē pārvadāto pasažieru skaitu</li>
+                                        <li>Minimizē tukšos braucienus</li>
+                                    </ul>
+                                </div>
+                                
+                                <h6>Aktīvie ierobežojumi:</h6>
+                                <ul>
+                                    <li><span class="badge bg-danger">Obligāts</span> Vilciens nevar būt divās stacijās vienlaikus (&lt;30 min)</li>
+                                    <li><span class="badge bg-danger">Obligāts</span> Pasažieri ≤ vilciena kapacitāte</li>
+                                    <li><span class="badge bg-success">Optimizācija</span> Maksimizēt pasažieru uzņemšanu (+1 par pasažieri)</li>
+                                    <li><span class="badge bg-success">Optimizācija</span> Minimizēt tukšus braucienus (-10 par tukšu)</li>
+                                </ul>
+                            </div>
+                            <div class="col-lg-7">
+                                <h5>Piešķīrumi</h5>
+                                <div id="assignmentsList">
+                                    <p class="text-muted">Spiediet "Sākt risināšanu", lai redzētu vilcienu piešķīrumus...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="routes">
+                        <h5 class="mb-4">Maršrutu vizualizācija</h5>
+                        <div id="routesVisualization">
+                            <p class="text-muted">Ielādē maršrutu datus...</p>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="timeline">
+                        <h5 class="mb-4">Vilcienu grafiks pa stacijām</h5>
+                        <div id="timelineVisualization">
+                            <p class="text-muted">Ielādē grafika datus...</p>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="json">
+                        <pre id="jsonDisplay" style="max-height: 500px; overflow-y: auto;"><code>Ielādē...</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center text-muted py-4 mt-5">
+        <div class="container">
+            <p>LU EZTF DF | Praktiskā Kombinatorika | Lielais Mājasdarbs 2024/2025</p>
+            <p>
+                <a href="https://docs.timefold.ai/" target="_blank">Timefold dokumentācija</a> | 
+                <a href="/q/swagger-ui" target="_blank">API dokumentācija</a>
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let autoRefreshInterval = null;
+
+        // Load initial data
+        async function loadSchedule() {
+            try {
+                const response = await fetch('/rolling-stock-schedule');
+                const data = await response.json();
+                
+                // Update counts
+                document.getElementById('trainCount').textContent = data.vilcieni?.length || 0;
+                document.getElementById('stationCount').textContent = data.stacijas?.length || 0;
+                document.getElementById('routeCount').textContent = data.marsruti?.length || 0;
+                document.getElementById('departureCount').textContent = data.atiesanasLaiki?.length || 0;
+                
+                // Update status
+                updateStatus(data.solverStatus);
+                
+                // Update score
+                if (data.score) {
+                    // Handle both string format "0hard/4605soft" and object format
+                    let hardScore = 0;
+                    let softScore = 0;
+                    
+                    if (typeof data.score === 'string') {
+                        // Parse "0hard/4605soft" format
+                        const match = data.score.match(/(-?\d+)hard\/(-?\d+)soft/);
+                        if (match) {
+                            hardScore = parseInt(match[1]);
+                            softScore = parseInt(match[2]);
+                        }
+                    } else if (typeof data.score === 'object') {
+                        hardScore = data.score.hardScore || 0;
+                        softScore = data.score.softScore || 0;
+                    }
+                    
+                    document.getElementById('scoreDisplay').textContent = `${hardScore}hard/${softScore}soft`;
+                    document.getElementById('hardScore').textContent = `Obligātie: ${hardScore}`;
+                    document.getElementById('softScore').textContent = `Optimizācija: ${softScore}`;
+                }
+                
+                // Update JSON display
+                document.getElementById('jsonDisplay').textContent = JSON.stringify(data, null, 2);
+                
+                // Update assignments
+                updateAssignments(data);
+                
+                // Update route visualization
+                updateRoutesVisualization(data);
+                
+                // Update timeline
+                updateTimeline(data);
+            } catch (error) {
+                console.error('Kļūda ielādējot grafiku:', error);
+            }
+        }
+
+        function updateStatus(status) {
+            const badge = document.getElementById('statusBadge');
+            const solveButton = document.getElementById('solveButton');
+            const stopButton = document.getElementById('stopButton');
+            const solveSpinner = document.getElementById('solveSpinner');
+            const solveButtonText = document.getElementById('solveButtonText');
+            const stopSpinner = document.getElementById('stopSpinner');
+            const stopButtonText = document.getElementById('stopButtonText');
+            
+            const statusText = {
+                'NOT_SOLVING': 'NAV AKTĪVS',
+                'SOLVING_ACTIVE': 'AKTĪVS',
+                'SOLVING_SCHEDULED': 'GAIDA'
+            };
+            badge.textContent = statusText[status] || 'NAV AKTĪVS';
+            
+            if (status === 'SOLVING_ACTIVE') {
+                badge.className = 'badge status-badge bg-warning text-dark';
+                solveButton.style.display = 'none';
+                solveButton.disabled = false;
+                solveSpinner.classList.remove('active');
+                solveButtonText.textContent = 'Sākt risināšanu';
+                stopButton.style.display = 'inline-block';
+                stopButton.disabled = false;
+                stopSpinner.classList.remove('active');
+                stopButtonText.textContent = 'Apturēt risināšanu';
+                startAutoRefresh();
+            } else {
+                badge.className = 'badge status-badge bg-secondary';
+                solveButton.style.display = 'inline-block';
+                solveButton.disabled = false;
+                solveSpinner.classList.remove('active');
+                solveButtonText.textContent = 'Sākt risināšanu';
+                stopButton.style.display = 'none';
+                stopButton.disabled = false;
+                stopSpinner.classList.remove('active');
+                stopButtonText.textContent = 'Apturēt risināšanu';
+                stopAutoRefresh();
+            }
+        }
+
+        function updateAssignments(data) {
+            const list = document.getElementById('assignmentsList');
+            if (!data.atiesanasLaiki || data.atiesanasLaiki.length === 0) {
+                list.innerHTML = '<p class="text-muted">Nav atrasta neviena atiešana</p>';
+                return;
+            }
+            
+            const assigned = data.atiesanasLaiki.filter(d => d.vilciens != null);
+            const unassigned = data.atiesanasLaiki.filter(d => d.vilciens == null);
+            
+            const showAll = window.showAllAssignments || false;
+            const displayLimit = showAll ? assigned.length : 20;
+            
+            list.innerHTML = `
+                <div class="alert alert-info mb-3">
+                    <strong>${assigned.length}</strong> atiešanas piešķirtas, 
+                    <strong>${unassigned.length}</strong> nepiešķirtas
+                </div>
+                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem; background-color: #f8f9fa;">
+                    ${assigned.slice(0, displayLimit).map(d => `
+                        <div class="mb-2 p-2" style="background: white; border-radius: 0.25rem; border-left: 3px solid #0d6efd;">
+                            <strong>Vilciens ${d.vilciens?.id}</strong> → Stacija ${d.stacijasId} plkst. <strong>${d.laiks}</strong>
+                            <span class="badge bg-primary ms-2">${d.cilvekuDelta} pasažieri</span>
+                        </div>
+                    `).join('')}
+                </div>
+                ${assigned.length > 20 && !showAll ? `
+                    <button class="btn btn-outline-primary btn-sm mt-2" onclick="toggleShowAll()">
+                        Rādīt visus (vēl ${assigned.length - 20})
+                    </button>
+                ` : ''}
+                ${showAll && assigned.length > 20 ? `
+                    <button class="btn btn-outline-secondary btn-sm mt-2" onclick="toggleShowAll()">
+                        Rādīt mazāk
+                    </button>
+                ` : ''}
+            `;
+        }
+        
+        function toggleShowAll() {
+            window.showAllAssignments = !window.showAllAssignments;
+            loadSchedule();
+        }
+        
+        function updateRoutesVisualization(data) {
+            const container = document.getElementById('routesVisualization');
+            if (!data.marsruti || data.marsruti.length === 0) {
+                container.innerHTML = '<p class="text-muted">Nav atrasts neviens maršruts</p>';
+                return;
+            }
+            
+            const stacijasMap = new Map();
+            (data.stacijas || []).forEach(s => stacijasMap.set(s.id, s.nosaukums));
+            
+            const marsrutsMap = new Map();
+            (data.marsruti || []).forEach(m => marsrutsMap.set(m.id, m.nosaukums));
+            
+            const routeColors = ['#0d6efd', '#198754', '#dc3545', '#ffc107', '#6f42c1'];
+            
+            container.innerHTML = data.marsruti.map((marsruts, idx) => {
+                const assigned = (data.atiesanasLaiki || []).filter(d => 
+                    d.marsrutaId === marsruts.id && d.vilciens != null
+                );
+                
+                // Group by train
+                const byTrain = {};
+                assigned.forEach(d => {
+                    const tid = d.vilciens.id;
+                    if (!byTrain[tid]) byTrain[tid] = [];
+                    byTrain[tid].push(d);
+                });
+                
+                const color = routeColors[idx % routeColors.length];
+                
+                return `
+                    <div class="card mb-4" style="border-left: 4px solid ${color};">
+                        <div class="card-header" style="background-color: ${color}; color: white;">
+                            <h6 class="mb-0">${marsruts.nosaukums}</h6>
+                        </div>
+                        <div class="card-body">
+                            <!-- Station route -->
+                            <div class="row mb-3">
+                                <div class="col-12">
+                                    <div class="d-flex align-items-center" style="overflow-x: auto;">
+                                        ${marsruts.stacijas.map((stId, stIdx) => `
+                                            <div class="text-center" style="min-width: 100px;">
+                                                <div class="rounded-circle d-inline-flex align-items-center justify-content-center text-white fw-bold" 
+                                                     style="width: 50px; height: 50px; background: ${color}; font-size: 0.7rem;">
+                                                    ${stacijasMap.get(stId) || stId}
+                                                </div>
+                                            </div>
+                                            ${stIdx < marsruts.stacijas.length - 1 ? `
+                                                <div style="flex-grow: 1; height: 3px; background: ${color}; min-width: 50px; margin: 0 5px;"></div>
+                                            ` : ''}
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Statistics -->
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <small class="text-muted">Stacijas:</small>
+                                    <strong class="d-block">${marsruts.stacijas.length}</strong>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">Piešķirti vilcieni:</small>
+                                    <strong class="d-block">${Object.keys(byTrain).length}</strong>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">Kopā atiešanas:</small>
+                                    <strong class="d-block">${assigned.length}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function updateTimeline(data) {
+            const container = document.getElementById('timelineVisualization');
+            if (!data.vilcieni || !data.atiesanasLaiki) {
+                container.innerHTML = '<p class="text-muted">Nav pietiekami datu grafikam</p>';
+                return;
+            }
+            
+            const assigned = (data.atiesanasLaiki || []).filter(d => d.vilciens != null);
+            
+            const stacijasMap = new Map();
+            (data.stacijas || []).forEach(s => stacijasMap.set(s.id, s.nosaukums));
+            
+            const marsrutsMap = new Map();
+            (data.marsruti || []).forEach(m => marsrutsMap.set(m.id, {
+                nosaukums: m.nosaukums,
+                stacijas: m.stacijas
+            }));
+            
+            const routeColors = {'1': '#0d6efd', '2': '#198754', '3': '#dc3545', '4': '#ffc107'};
+            
+            // Group departures into trips by train, then by route start time
+            const tripsByTrain = {};
+            
+            assigned.forEach(d => {
+                const trainId = d.vilciens.id;
+                if (!tripsByTrain[trainId]) tripsByTrain[trainId] = [];
+                tripsByTrain[trainId].push(d);
+            });
+            
+            // For each train, group departures into logical trips
+            Object.keys(tripsByTrain).forEach(trainId => {
+                const allDepartures = tripsByTrain[trainId];
+                allDepartures.sort((a, b) => a.laiks.localeCompare(b.laiks));
+                
+                const trips = [];
+                const processedIds = new Set();
+                
+                allDepartures.forEach(d => {
+                    if (processedIds.has(d.id)) return;
+                    
+                    const routeInfo = marsrutsMap.get(d.marsrutaId);
+                    if (!routeInfo) return;
+                    
+                    const stationIndex = routeInfo.stacijas.indexOf(d.stacijasId);
+                    
+                    // Only start a new trip if this is the first station
+                    if (stationIndex === 0) {
+                        const tripDepartures = [d];
+                        processedIds.add(d.id);
+                        
+                        // Collect subsequent stations on this route
+                        for (let i = 1; i < routeInfo.stacijas.length; i++) {
+                            const nextStationId = routeInfo.stacijas[i];
+                            const nextDep = allDepartures.find(dep => 
+                                !processedIds.has(dep.id) &&
+                                dep.marsrutaId === d.marsrutaId &&
+                                dep.stacijasId === nextStationId &&
+                                dep.laiks > d.laiks
+                            );
+                            
+                            if (nextDep) {
+                                tripDepartures.push(nextDep);
+                                processedIds.add(nextDep.id);
+                            }
+                        }
+                        
+                        trips.push({
+                            marsrutaId: d.marsrutaId,
+                            departures: tripDepartures
+                        });
+                    }
+                });
+                
+                tripsByTrain[trainId] = trips;
+            });
+            
+            if (Object.keys(tripsByTrain).length === 0) {
+                container.innerHTML = '<p class="text-muted">Nav piešķirtu reisu</p>';
+                return;
+            }
+            
+            // Generate timeline HTML
+            container.innerHTML = Object.entries(tripsByTrain).map(([trainId, trips]) => {
+                const train = data.vilcieni.find(v => v.id == trainId);
+                
+                // Filter out invalid trips BEFORE counting
+                const validTrips = trips.filter(trip => {
+                    const orderedStops = trip.departures;
+                    if (orderedStops.length === 0) return false;
+                    
+                    const firstStop = stacijasMap.get(orderedStops[0].stacijasId);
+                    const lastStop = stacijasMap.get(orderedStops[orderedStops.length - 1].stacijasId);
+                    const startTime = orderedStops[0].laiks.substring(0, 5);
+                    const endTime = orderedStops[orderedStops.length - 1].laiks.substring(0, 5);
+                    
+                    // Skip if same station AND same time
+                    if (firstStop === lastStop && startTime === endTime) {
+                        return false;
+                    }
+                    return true;
+                });
+                
+                if (validTrips.length === 0) {
+                    return ''; // Skip trains with no valid trips
+                }
+                
+                return `
+                    <div class="card mb-4">
+                        <div class="card-header bg-dark text-white">
+                            <div class="row align-items-center">
+                                <div class="col-auto">
+                                    <strong style="font-size: 1.1rem;">Vilciens ${trainId}</strong>
+                                </div>
+                                <div class="col-auto">
+                                    <span class="badge bg-info">${validTrips.length} reisi</span>
+                                </div>
+                                <div class="col-auto">
+                                    <span class="badge bg-secondary">Kapacitāte: ${train?.kapacitate || '?'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div style="overflow-x: auto;">
+                                <table class="table table-sm mb-0">
+                                    <thead style="background-color: #f8f9fa;">
+                                        <tr>
+                                            <th style="width: 100px; padding: 12px;">Laiks</th>
+                                            <th style="width: 150px; padding: 12px;">Maršruts</th>
+                                            <th style="padding: 12px;">Reiss</th>
+                                            <th style="width: 120px; text-align: center; padding: 12px;">Pasažieri</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${validTrips.map(trip => {
+                                            const routeInfo = marsrutsMap.get(trip.marsrutaId);
+                                            const color = routeColors[trip.marsrutaId] || '#6c757d';
+                                            
+                                            // Sort stations by route order
+                                            const orderedStops = trip.departures.sort((a, b) => {
+                                                const aIdx = routeInfo.stacijas.indexOf(a.stacijasId);
+                                                const bIdx = routeInfo.stacijas.indexOf(b.stacijasId);
+                                                return aIdx - bIdx;
+                                            });
+                                            
+                                            const firstStop = stacijasMap.get(orderedStops[0].stacijasId);
+                                            const lastStop = stacijasMap.get(orderedStops[orderedStops.length - 1].stacijasId);
+                                            const startTime = orderedStops[0].laiks.substring(0, 5);
+                                            const endTime = orderedStops[orderedStops.length - 1].laiks.substring(0, 5);
+                                            const totalPassengers = orderedStops.reduce((sum, d) => sum + d.cilvekuDelta, 0);
+                                            
+                                            const tripId = `trip_${trainId}_${trip.marsrutaId}_${startTime.replace(':', '')}`;
+                                            
+                                            return `
+                                                <tr style="border-left: 4px solid ${color};">
+                                                    <td style="padding: 12px;">
+                                                        <div style="font-weight: bold; font-size: 1.05rem;">${startTime}</div>
+                                                        ${startTime !== endTime ? `<small class="text-muted">→ ${endTime}</small>` : ''}
+                                                    </td>
+                                                    <td style="padding: 12px;">
+                                                        <span class="badge" style="background: ${color}; font-size: 0.85rem;">
+                                                            ${routeInfo?.nosaukums || 'Maršruts ' + trip.marsrutaId}
+                                                        </span>
+                                                    </td>
+                                                    <td style="padding: 12px;">
+                                                        <div>
+                                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                                <span class="fw-bold">${firstStop}</span>
+                                                                ${orderedStops.length > 1 ? `
+                                                                    <svg width="24" height="12" viewBox="0 0 24 12" style="flex-shrink: 0;">
+                                                                        <line x1="0" y1="6" x2="20" y2="6" stroke="${color}" stroke-width="2"/>
+                                                                        <polygon points="20,2 24,6 20,10" fill="${color}"/>
+                                                                    </svg>
+                                                                    <span class="fw-bold">${lastStop}</span>
+                                                                ` : `
+                                                                    <small class="text-muted">(viena pietura)</small>
+                                                                `}
+                                                                ${orderedStops.length > 2 ? `
+                                                                    <button class="btn btn-sm btn-outline-secondary" style="padding: 2px 8px; font-size: 0.75rem;" 
+                                                                            onclick="toggleStops('${tripId}')">
+                                                                        <span id="${tripId}_icon">▼</span> ${orderedStops.length} pieturas
+                                                                    </button>
+                                                                ` : orderedStops.length === 2 ? `
+                                                                    <small class="text-muted ms-2">(2 pieturas)</small>
+                                                                ` : ''}
+                                                            </div>
+                                                            ${orderedStops.length > 2 ? `
+                                                                <div id="${tripId}" style="display: none; margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px;">
+                                                                    ${orderedStops.map((stop, idx) => `
+                                                                        <div style="margin: 4px 0; padding-left: ${idx * 12}px;">
+                                                                            <span class="badge" style="background: ${color}; font-size: 0.7rem;">${idx + 1}</span>
+                                                                            <strong>${stop.laiks.substring(0, 5)}</strong> - 
+                                                                            ${stacijasMap.get(stop.stacijasId)}
+                                                                            <span class="badge bg-info ms-1" style="font-size: 0.7rem;">${stop.cilvekuDelta} p.</span>
+                                                                        </div>
+                                                                    `).join('')}
+                                                                </div>
+                                                            ` : ''}
+                                                        </div>
+                                                    </td>
+                                                    <td style="padding: 12px; text-align: center;">
+                                                        <span class="badge" style="background: ${color}; font-size: 0.9rem;">
+                                                            ${totalPassengers} pasažieri
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }        
+        function toggleStops(tripId) {
+            const element = document.getElementById(tripId);
+            const icon = document.getElementById(tripId + '_icon');
+            if (element.style.display === 'none') {
+                element.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                element.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+        async function solve() {
+            const solveButton = document.getElementById('solveButton');
+            const solveSpinner = document.getElementById('solveSpinner');
+            const solveButtonText = document.getElementById('solveButtonText');
+            
+            // Disable button immediately
+            solveButton.disabled = true;
+            solveSpinner.classList.add('active');
+            solveButtonText.textContent = 'Risina...';
+            
+            try {
+                await fetch('/rolling-stock-schedule/solve', { method: 'POST' });
+                setTimeout(loadSchedule, 1000);
+            } catch (error) {
+                console.error('Kļūda sākot risinātāju:', error);
+                alert('Kļūda sākot risinātāju: ' + error.message);
+                // Re-enable button on error
+                solveButton.disabled = false;
+                solveSpinner.classList.remove('active');
+                solveButtonText.textContent = 'Sākt risināšanu';
+            }
+        }
+
+        async function stopSolving() {
+            const stopButton = document.getElementById('stopButton');
+            const stopSpinner = document.getElementById('stopSpinner');
+            const stopButtonText = document.getElementById('stopButtonText');
+            
+            // Disable button immediately
+            stopButton.disabled = true;
+            stopSpinner.classList.add('active');
+            stopButtonText.textContent = 'Aptur...';
+            
+            try {
+                await fetch('/rolling-stock-schedule/stop-solving');
+                setTimeout(loadSchedule, 500);
+            } catch (error) {
+                console.error('Kļūda apturējot risinātāju:', error);
+                // Re-enable button on error
+                stopButton.disabled = false;
+                stopSpinner.classList.remove('active');
+                stopButtonText.textContent = 'Apturēt risināšanu';
+            }
+        }
+
+        function startAutoRefresh() {
+            if (!autoRefreshInterval) {
+                autoRefreshInterval = setInterval(loadSchedule, 2000);
+            }
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+
+        // Load data on page load
+        loadSchedule();
+    </script>
+</body>
+</html>
