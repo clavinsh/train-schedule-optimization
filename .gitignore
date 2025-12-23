@@ -1,5 +1,7 @@
 # Maven build output
 target/
+.mvn/wrapper/maven-wrapper.jar
+maven-wrapper.zip
 !target/benchmark/
 
 # IDE
