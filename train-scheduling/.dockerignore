@@ -1,0 +1,10 @@
+target/
+.mvn/wrapper/maven-wrapper.jar
+maven-wrapper.zip
+*.log
+.quarkus/
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
