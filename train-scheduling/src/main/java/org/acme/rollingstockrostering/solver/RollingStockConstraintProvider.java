@@ -1,7 +1,5 @@
 package org.acme.rollingstockrostering.solver;
 
-import java.util.List;
-
 import org.acme.rollingstockrostering.domain.*;
 
 import ai.timefold.solver.core.api.score.buildin.hardsoft.HardSoftScore;
@@ -98,19 +96,34 @@ public class RollingStockConstraintProvider implements ConstraintProvider {
     
     /**
      * HARD CONSTRAINT 3: vilciensNonakDepo
-     * 
-     * Logic: Penalize if trains don't visit their depot station.
-     * Made SOFT instead of HARD for more flexibility.
-     * 
+     *
+     * Logic: Ensure trains end their day at their depot station.
+     *
      * Implementation:
-     * - For each train with a depot, check if it visits that depot station
-     * - Give soft penalty if depot not visited
+     * - For each departure that has a train assigned
+     * - Check if it's the last departure for that train (latest time)
+     * - If it's the last departure and the train has a depot
+     * - Penalize if the station is NOT the depot station
      */
     Constraint vilciensNonakDepo(ConstraintFactory constraintFactory) {
-        // Simplified: Don't enforce depot constraint strictly
-        // This makes the problem more solvable
-        return constraintFactory.forEach(Vilciens.class)
-                .filter(vilciens -> false) // Disabled for now
+        return constraintFactory.forEach(AtiesanasLaiks.class)
+                // Only check departures with assigned trains
+                .filter(atiesanasLaiks -> atiesanasLaiks.getVilciens() != null)
+                .filter(atiesanasLaiks -> atiesanasLaiks.getLaiks() != null)
+                // Check if there's NO later departure for the same train
+                .ifNotExists(AtiesanasLaiks.class,
+                        ai.timefold.solver.core.api.score.stream.Joiners.equal(AtiesanasLaiks::getVilciens),
+                        ai.timefold.solver.core.api.score.stream.Joiners.greaterThan(AtiesanasLaiks::getLaiks)
+                )
+                // Join with Depo to find this train's depot station
+                .join(Depo.class,
+                        ai.timefold.solver.core.api.score.stream.Joiners.equal(
+                                atiesanasLaiks -> atiesanasLaiks.getVilciens().getId(),
+                                Depo::getVilciensId
+                        )
+                )
+                // Filter: penalize if last departure is NOT at depot station
+                .filter((atiesanasLaiks, depo) -> !atiesanasLaiks.getStacijasId().equals(depo.getStacijaId()))
                 .penalize(HardSoftScore.ONE_HARD)
                 .asConstraint("vilciensNonakDepo");
     }
