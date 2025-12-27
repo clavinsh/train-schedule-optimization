@@ -12,23 +12,20 @@
       <scoreDirectorFactory>
         <constraintProviderClass>org.acme.rollingstockrostering.solver.RollingStockConstraintProvider</constraintProviderClass>
       </scoreDirectorFactory>
-      <termination>
-        <minutesSpentLimit>2</minutesSpentLimit>
-      </termination>
     </solver>
   </inheritedSolverBenchmark>
 
-  <!-- First Fit Decreasing (baseline) -->
+  <!-- First Fit (baseline) -->
   <solverBenchmark>
-    <name>First Fit Decreasing</name>
+    <name>First Fit</name>
     <solver>
+      <termination>
+        <secondsSpentLimit>30</secondsSpentLimit>
+      </termination>
       <constructionHeuristic>
-        <constructionHeuristicType>FIRST_FIT_DECREASING</constructionHeuristicType>
+        <constructionHeuristicType>FIRST_FIT</constructionHeuristicType>
       </constructionHeuristic>
       <localSearch>
-        <termination>
-          <secondsSpentLimit>30</secondsSpentLimit>
-        </termination>
       </localSearch>
     </solver>
   </solverBenchmark>
@@ -37,16 +34,16 @@
   <solverBenchmark>
     <name>Late Acceptance (size 400)</name>
     <solver>
+      <termination>
+        <secondsSpentLimit>30</secondsSpentLimit>
+      </termination>
       <constructionHeuristic>
-        <constructionHeuristicType>FIRST_FIT_DECREASING</constructionHeuristicType>
+        <constructionHeuristicType>FIRST_FIT</constructionHeuristicType>
       </constructionHeuristic>
       <localSearch>
         <acceptor>
           <lateAcceptanceSize>400</lateAcceptanceSize>
         </acceptor>
-        <termination>
-          <secondsSpentLimit>30</secondsSpentLimit>
-        </termination>
       </localSearch>
     </solver>
   </solverBenchmark>
@@ -55,16 +52,16 @@
   <solverBenchmark>
     <name>Late Acceptance (size 800)</name>
     <solver>
+      <termination>
+        <secondsSpentLimit>30</secondsSpentLimit>
+      </termination>
       <constructionHeuristic>
-        <constructionHeuristicType>FIRST_FIT_DECREASING</constructionHeuristicType>
+        <constructionHeuristicType>FIRST_FIT</constructionHeuristicType>
       </constructionHeuristic>
       <localSearch>
         <acceptor>
           <lateAcceptanceSize>800</lateAcceptanceSize>
         </acceptor>
-        <termination>
-          <secondsSpentLimit>30</secondsSpentLimit>
-        </termination>
       </localSearch>
     </solver>
   </solverBenchmark>
@@ -73,16 +70,16 @@
   <solverBenchmark>
     <name>Tabu Search (size 7)</name>
     <solver>
+      <termination>
+        <secondsSpentLimit>30</secondsSpentLimit>
+      </termination>
       <constructionHeuristic>
-        <constructionHeuristicType>FIRST_FIT_DECREASING</constructionHeuristicType>
+        <constructionHeuristicType>FIRST_FIT</constructionHeuristicType>
       </constructionHeuristic>
       <localSearch>
         <acceptor>
           <entityTabuSize>7</entityTabuSize>
         </acceptor>
-        <termination>
-          <secondsSpentLimit>30</secondsSpentLimit>
-        </termination>
       </localSearch>
     </solver>
   </solverBenchmark>
@@ -91,35 +88,35 @@
   <solverBenchmark>
     <name>Simulated Annealing</name>
     <solver>
+      <termination>
+        <secondsSpentLimit>30</secondsSpentLimit>
+      </termination>
       <constructionHeuristic>
-        <constructionHeuristicType>FIRST_FIT_DECREASING</constructionHeuristicType>
+        <constructionHeuristicType>FIRST_FIT</constructionHeuristicType>
       </constructionHeuristic>
       <localSearch>
         <acceptor>
           <simulatedAnnealingStartingTemperature>0hard/200soft</simulatedAnnealingStartingTemperature>
         </acceptor>
-        <termination>
-          <secondsSpentLimit>30</secondsSpentLimit>
-        </termination>
       </localSearch>
     </solver>
   </solverBenchmark>
 
   <!-- Hybrid: Tabu + Late Acceptance -->
   <solverBenchmark>
-    <name>Tabu + Late Acceptance</name>
+    <name>Tabu and Late Acceptance</name>
     <solver>
+      <termination>
+        <secondsSpentLimit>30</secondsSpentLimit>
+      </termination>
       <constructionHeuristic>
-        <constructionHeuristicType>FIRST_FIT_DECREASING</constructionHeuristicType>
+        <constructionHeuristicType>FIRST_FIT</constructionHeuristicType>
       </constructionHeuristic>
       <localSearch>
         <acceptor>
           <entityTabuSize>7</entityTabuSize>
           <lateAcceptanceSize>400</lateAcceptanceSize>
         </acceptor>
-        <termination>
-          <secondsSpentLimit>30</secondsSpentLimit>
-        </termination>
       </localSearch>
     </solver>
   </solverBenchmark>
