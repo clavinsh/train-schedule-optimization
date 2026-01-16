@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  train-scheduling:
+    build:
+      context: ./train-scheduling
+      dockerfile: Dockerfile
+    image: train-scheduling:latest
+    container_name: train-scheduling-app
+    ports:
+      - "8080:8080"
+    environment:
+      # Timefold Solver configuration
+      - QUARKUS_TIMEFOLD_SOLVER_TERMINATION_SPENT_LIMIT=30s
+      # Optional: Override log level
+      # - QUARKUS_LOG_CATEGORY_AI_TIMEFOLD_SOLVER_LEVEL=DEBUG
+    # Uncomment for production-like resource limits
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2'
+    #       memory: 2G
+    restart: unless-stopped

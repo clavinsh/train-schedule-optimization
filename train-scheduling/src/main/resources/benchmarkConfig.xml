@@ -3,7 +3,7 @@
                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                   xsi:schemaLocation="https://timefold.ai/xsd/benchmark https://timefold.ai/xsd/benchmark/benchmark.xsd">
   <benchmarkDirectory>target/benchmark</benchmarkDirectory>
-  <warmUpSecondsSpentLimit>30</warmUpSecondsSpentLimit>
+  <warmUpSecondsSpentLimit>10</warmUpSecondsSpentLimit>
 
   <inheritedSolverBenchmark>
     <solver>
@@ -20,7 +20,7 @@
     <name>First Fit</name>
     <solver>
       <termination>
-        <secondsSpentLimit>30</secondsSpentLimit>
+        <secondsSpentLimit>10</secondsSpentLimit>
       </termination>
       <constructionHeuristic>
         <constructionHeuristicType>FIRST_FIT</constructionHeuristicType>
@@ -35,7 +35,7 @@
     <name>Late Acceptance (size 400)</name>
     <solver>
       <termination>
-        <secondsSpentLimit>30</secondsSpentLimit>
+        <secondsSpentLimit>10</secondsSpentLimit>
       </termination>
       <constructionHeuristic>
         <constructionHeuristicType>FIRST_FIT</constructionHeuristicType>
@@ -53,7 +53,7 @@
     <name>Late Acceptance (size 800)</name>
     <solver>
       <termination>
-        <secondsSpentLimit>30</secondsSpentLimit>
+        <secondsSpentLimit>10</secondsSpentLimit>
       </termination>
       <constructionHeuristic>
         <constructionHeuristicType>FIRST_FIT</constructionHeuristicType>
@@ -71,7 +71,7 @@
     <name>Tabu Search (size 7)</name>
     <solver>
       <termination>
-        <secondsSpentLimit>30</secondsSpentLimit>
+        <secondsSpentLimit>10</secondsSpentLimit>
       </termination>
       <constructionHeuristic>
         <constructionHeuristicType>FIRST_FIT</constructionHeuristicType>
@@ -89,7 +89,7 @@
     <name>Simulated Annealing</name>
     <solver>
       <termination>
-        <secondsSpentLimit>30</secondsSpentLimit>
+        <secondsSpentLimit>10</secondsSpentLimit>
       </termination>
       <constructionHeuristic>
         <constructionHeuristicType>FIRST_FIT</constructionHeuristicType>
@@ -107,7 +107,7 @@
     <name>Tabu and Late Acceptance</name>
     <solver>
       <termination>
-        <secondsSpentLimit>30</secondsSpentLimit>
+        <secondsSpentLimit>10</secondsSpentLimit>
       </termination>
       <constructionHeuristic>
         <constructionHeuristicType>FIRST_FIT</constructionHeuristicType>
