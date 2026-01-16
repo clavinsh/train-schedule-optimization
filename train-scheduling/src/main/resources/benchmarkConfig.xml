@@ -8,7 +8,7 @@
   <inheritedSolverBenchmark>
     <solver>
       <solutionClass>org.acme.rollingstockrostering.domain.RollingStockSchedule</solutionClass>
-      <entityClass>org.acme.rollingstockrostering.domain.AtiesanasLaiks</entityClass>
+      <entityClass>org.acme.rollingstockrostering.domain.Trip</entityClass>
       <scoreDirectorFactory>
         <constraintProviderClass>org.acme.rollingstockrostering.solver.RollingStockConstraintProvider</constraintProviderClass>
       </scoreDirectorFactory>
