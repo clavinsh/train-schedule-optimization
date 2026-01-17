@@ -1,424 +1,916 @@
-let autoRefreshIntervalId = null;
-const formatter = JSJoda.DateTimeFormatter.ofPattern("MM/dd/YYYY HH:mm").withLocale(JSJodaLocale.Locale.ENGLISH);
+// Rolling Stock Schedule Optimization - Frontend Application
 
-const zoomMin = 1000 * 60 * 60 * 8 // 2 hours in milliseconds
-const zoomMax = 2 * 7 * 1000 * 60 * 60 * 24 // 2 weeks in milliseconds
+let currentSchedule = null;
+let currentJobId = null;
+let currentAnalysis = null;
+let pollingInterval = null;
+let countdownInterval = null;
+let solveStartTime = null;
+let selectedRideId = null;
+const POLL_INTERVAL_MS = 2000;
+const SOLVER_TIMEOUT_SECONDS = 30; // From rollingStockSolverConfig.xml
 
-const byTimelineOptions = {
-    timeAxis: {scale: "hour", step: 8},
-    orientation: {axis: "top"},
-    stack: false,
-    xss: {disabled: true}, // Items are XSS safe through JQuery
-    zoomMin: zoomMin,
-    zoomMax: zoomMax,
-};
+// Lookup maps for resolving JSON identity references
+let routeMap = new Map();
+let trainMap = new Map();
+let stationMap = new Map();
+let rideMap = new Map();
 
-const byCrewPanel = document.getElementById("byCrewPanel");
-let byCrewGroupData = new vis.DataSet();
-let byCrewItemData = new vis.DataSet();
-let byCrewTimeline = new vis.Timeline(byCrewPanel, byCrewItemData, byCrewGroupData, byTimelineOptions);
+// Map from ride ID to constraint violations
+let rideViolations = new Map();
+// Map from route ID to constraint violations
+let routeViolations = new Map();
 
-const byFlightPanel = document.getElementById("byFlightPanel");
-let byFlightGroupData = new vis.DataSet();
-let byFlightItemData = new vis.DataSet();
-let byFlightTimeline = new vis.Timeline(byFlightPanel, byFlightItemData, byFlightGroupData, byTimelineOptions);
+// DOM Elements
+const btnLoadDemo = document.getElementById('btn-load-demo');
+const btnSolve = document.getElementById('btn-solve');
+const btnStop = document.getElementById('btn-stop');
+const solvingIndicator = document.getElementById('solving-indicator');
+const scoreValue = document.getElementById('score-value');
+const statusBadge = document.getElementById('status-badge');
+const routeFilter = document.getElementById('route-filter');
+const timetableContainer = document.getElementById('timetable-container');
+const constraintContainer = document.getElementById('constraint-container');
 
-let scheduleId = null;
-let loadedSchedule = null;
-let viewType = "R";
+// Statistics elements
+const statRoutes = document.getElementById('stat-routes');
+const statTrains = document.getElementById('stat-trains');
+const statRides = document.getElementById('stat-rides');
+const statAssigned = document.getElementById('stat-assigned');
+const statUnassigned = document.getElementById('stat-unassigned');
 
-$(document).ready(function () {
+// Event Listeners
+btnLoadDemo.addEventListener('click', loadDemoData);
+btnSolve.addEventListener('click', startSolving);
+btnStop.addEventListener('click', stopSolving);
+routeFilter.addEventListener('change', renderTimetable);
 
-    $("#solveButton").click(function () {
-        solve();
-    });
-    $("#stopSolvingButton").click(function () {
-        stopSolving();
-    });
-    $("#analyzeButton").click(function () {
-        analyze();
-    });
-    $("#byCrewTab").click(function () {
-        viewType = "R";
-        refreshSchedule();
-    });
-    $("#byFlightTab").click(function () {
-        viewType = "F";
-        refreshSchedule();
-    });
-    // HACK to allow vis-timeline to work within Bootstrap tabs
-    $("#byCrewTab").on('shown.bs.tab', function (event) {
-        byCrewTimeline.redraw();
-    })
-    $("#byFlightTab").on('shown.bs.tab', function (event) {
-        byFlightTimeline.redraw();
-    })
-
-    setupAjax();
-    refreshSchedule();
+// Close modal when clicking outside
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('ride-modal');
+    if (modal && e.target === modal) {
+        closeRideModal();
+    }
 });
 
-function setupAjax() {
-    $.ajaxSetup({
-        headers: {
-            'Content-Type': 'application/json', 'Accept': 'application/json,text/plain', // plain text is required by solve() returning UUID of the solver job
+// Build lookup maps from schedule data
+function buildLookupMaps() {
+    routeMap.clear();
+    trainMap.clear();
+    stationMap.clear();
+    rideMap.clear();
+
+    if (!currentSchedule) return;
+
+    // Build route map
+    (currentSchedule.routes || []).forEach(route => {
+        if (route && route.id) {
+            routeMap.set(route.id, route);
         }
     });
 
-    // Extend jQuery to support $.put() and $.delete()
-    jQuery.each(["put", "delete"], function (i, method) {
-        jQuery[method] = function (url, data, callback, type) {
-            if (jQuery.isFunction(data)) {
-                type = type || callback;
-                callback = data;
-                data = undefined;
-            }
-            return jQuery.ajax({
-                url: url, type: method, dataType: type, data: data, success: callback
-            });
-        };
-    });
-}
-
-function refreshSchedule() {
-    let path = "/schedules/" + scheduleId;
-    if (scheduleId === null) {
-        path = "/demo-data";
-    }
-
-    $.getJSON(path, function (schedule) {
-        loadedSchedule = schedule;
-        $('#exportData').attr('href', 'data:text/plain;charset=utf-8,' + JSON.stringify(loadedSchedule));
-        renderSchedule(schedule);
-    })
-        .fail(function (xhr, ajaxOptions, thrownError) {
-            showError("Getting the schedule has failed.", xhr);
-            refreshSolvingButtons(false);
-        });
-}
-
-function renderSchedule(schedule) {
-    refreshSolvingButtons(schedule.solverStatus != null && schedule.solverStatus !== "NOT_SOLVING");
-    $("#score").text("Score: " + (schedule.score == null ? "?" : schedule.score));
-    $("#info").text(`This dataset has ${schedule.employees.length} employees which need to be assigned ${schedule.flightAssignments.length} tasks on ${schedule.flights.length} flights.`);
-
-    if (viewType === "R") {
-        renderScheduleByCrew(schedule);
-    }
-    if (viewType === "F") {
-        renderScheduleByFlight(schedule);
-    }
-}
-
-function getCrewIcon(employee) {
-    return employee.skills.indexOf("Pilot") >= 0 ? '<span class="fas fa-solid fa-plane-departure" title="Pilot"></span>' :
-        '<span class="fas fa-solid fa-glass-martini" title="Flight Attendant"></span>';
-
-}
-
-function renderScheduleByCrew(schedule) {
-    const unassignedCrew = $("#unassignedCrew");
-    unassignedCrew.children().remove();
-    let unassignedCrewCount = 0;
-    byCrewGroupData.clear();
-    byCrewItemData.clear();
-
-    $.each(schedule.employees.sort((e1, e2) => e1.name.localeCompare(e2.name)), (_, employee) => {
-        const crewIcon = getCrewIcon(employee);
-        let content = `<div class="d-flex flex-column"><div><h5 class="card-title mb-1">${employee.name} (${employee.homeAirport}) ${crewIcon}</h5></div>`;
-
-        byCrewGroupData.add({
-            id: employee.id,
-            content: content,
-        });
-
-        // Unavailable days
-        if (employee.unavailableDays) {
-            let count = 0;
-            employee.unavailableDays.forEach(date => {
-                const unavailableDatetime = JSJoda.LocalDate.parse(date);
-                byCrewItemData.add({
-                    id: `${employee.id}-${count++}`,
-                    group: employee.id,
-                    content: $(`<div />`).html(),
-                    start: unavailableDatetime.atStartOfDay().toString(),
-                    end: unavailableDatetime.atStartOfDay().withHour(23).withMinute(59).toString(),
-                    style: "background-color: gray; min-height: 50px"
-                });
-            });
+    // Build train map
+    (currentSchedule.trains || []).forEach(train => {
+        if (train && train.id) {
+            trainMap.set(train.id, train);
         }
     });
 
-    const flightMap = new Map();
-    schedule.flights.forEach(f => flightMap.set(f.flightNumber, f));
-    $.each(schedule.flightAssignments, (_, assignment) => {
-        const flight = flightMap.get(assignment.flight);
-        if (assignment.employee == null) {
-            unassignedCrewCount++;
-            const departureDateTime = JSJoda.LocalDateTime.parse(flight.departureUTCDateTime);
-            const arrivalDateTime = JSJoda.LocalDateTime.parse(flight.arrivalUTCDateTime);
-            const unassignedElement = $(`<div class="card-body"/>`)
-                .append($(`<h5 class="card-title mb-1"/>`).text(`${flight.departureAirport} → ${flight.arrivalAirport}`))
-                .append($(`<p class="card-text ms-2 mb-0"/>`).text(`${departureDateTime.until(arrivalDateTime, JSJoda.ChronoUnit.HOURS)} hour(s)`))
-                .append($(`<p class="card-text ms-2 mb-0"/>`).text(`Departure: ${formatter.format(departureDateTime)}`))
-                .append($(`<p class="card-text ms-2 mb-0"/>`).text(`Arrival: ${formatter.format(arrivalDateTime)}`));
-
-            unassignedCrew.append($(`<div class="pl-1"/>`).append($(`<div class="card"/>`).append(unassignedElement)));
-            byCrewItemData.add({
-                id: assignment.id,
-                group: assignment.employee,
-                start: formatter.format(departureDateTime),
-                end: formatter.format(arrivalDateTime),
-                style: "background-color: #EF292999"
-            });
-        } else {
-            const byCrewElement = $("<div />").append($("<div class='d-flex justify-content-center' />").append($(`<h5 class="card-title mb-1"/>`).text(`${flight.departureAirport} → ${flight.arrivalAirport}`)));
-            byCrewItemData.add({
-                id: assignment.id,
-                group: assignment.employee,
-                content: byCrewElement.html(),
-                start: flight.departureUTCDateTime,
-                end: flight.arrivalUTCDateTime,
-                style: "min-height: 50px"
-            });
-        }
-    });
-    if (unassignedCrew.children().length === 0) {
-        const banner = $(`<div class="col-12"/>`)
-            .append($(`<div class="alert alert-success d-flex align-items-center justify-content-center" role="alert"/>`)
-                .append($(`<i class="fas fa-check-circle me-2"/>`))
-                .append($(`<span/>`).text("All crew members have been assigned!")));
-        unassignedCrew.append(banner);
-    }
-    byCrewTimeline.setWindow(JSJoda.LocalDateTime.now().minusMinutes(1).toString(),
-        JSJoda.LocalDateTime.now().plusDays(4).withHour(23).withMinute(59).toString());
-    byCrewTimeline.redraw();
-}
-
-function renderScheduleByFlight(schedule) {
-    const unassignedCrew = $("#unassignedCrew");
-    unassignedCrew.children().remove();
-    byFlightGroupData.clear();
-    byFlightItemData.clear();
-
-    $.each(schedule.flights.sort((e1, e2) => JSJoda.LocalDateTime.parse(e1.departureUTCDateTime)
-        .compareTo(JSJoda.LocalDateTime.parse(e2.departureUTCDateTime))), (_, flight) => {
-        let content = `<div class="d-flex flex-column"><div><h5 class="card-title mb-1">${flight.departureAirport} → ${flight.arrivalAirport}</h5></div>`;
-
-        byFlightGroupData.add({
-            id: flight.flightNumber,
-            content: content,
-        });
-    });
-
-    const employeeMap = new Map();
-    schedule.employees.forEach(e => employeeMap.set(e.id, e));
-
-    $.each(schedule.flights, (_, flight) => {
-        const content = $(`<div class="card-body"/>`).append($(`<h4 class="card-title mb-1"/>`).text(flight.flightNumber));
-        const unassignedElement = $(`<div class="card-body"/>`).append($(`<h4 class="card-title mb-1"/>`).text(`${flight.departureAirport} → ${flight.arrivalAirport}`));
-        const assignments = schedule.flightAssignments.filter(f => f.flight === flight.flightNumber);
-        let countUnassigned = 0;
-        const missingSkills = [];
-        const pilots = [];
-        const attendants = [];
-        assignments.forEach(assigment => {
-            if (assigment.employee == null) {
-                countUnassigned++;
-                missingSkills.push(assigment.requiredSkill);
-            } else {
-                const employee = employeeMap.get(assigment.employee);
-                if (assigment.requiredSkill === 'Pilot') {
-                    pilots.push(employee.name);
-                } else {
-                    attendants.push(employee.name);
-                }
-            }
-        });
-
-        if (pilots.length > 0 && attendants.length > 0) {
-            content.append($(`<p class="card-text" style="font-weight: bold"/>`).text(`Pilot(s)`));
-            pilots.sort().forEach(pilot => content.append($(`<p class="card-text mx-2"/>`).text(pilot)));
-            content.append($(`<p class="card-text" style="font-weight: bold"/>`).text(`Attendant(s)`));
-            attendants.sort().forEach(attendant => content.append($(`<p class="card-text mx-2"/>`).text(attendant)));
-            byFlightItemData.add({
-                id: flight.flightNumber,
-                group: flight.flightNumber,
-                content: $('<div class="d-flex flex-column" />').append(content).html(),
-                start: flight.departureUTCDateTime,
-                end: flight.arrivalUTCDateTime,
-            });
-        }
-        if (unassignedCrew.children().length === 0) {
-            const banner = $(`<div class="col-12"/>`)
-                .append($(`<div class="alert alert-success d-flex align-items-center justify-content-center" role="alert"/>`)
-                    .append($(`<i class="fas fa-check-circle me-2"/>`))
-                    .append($(`<span/>`).text("All crew members have been assigned!")));
-            unassignedCrew.append(banner);
+    // Build station map
+    (currentSchedule.stations || []).forEach(station => {
+        if (station && station.id) {
+            stationMap.set(station.id, station);
         }
     });
 
-    byFlightTimeline.setWindow(JSJoda.LocalDateTime.now().minusMinutes(1).toString(),
-        JSJoda.LocalDateTime.now().plusDays(4).withHour(23).withMinute(59).toString());
-    byFlightTimeline.redraw();
+    // Build ride map
+    (currentSchedule.rides || []).forEach(ride => {
+        if (ride && ride.id) {
+            rideMap.set(ride.id, ride);
+        }
+    });
 }
 
-function solve() {
-    $.post("/schedules", JSON.stringify(loadedSchedule), function (data) {
-        scheduleId = data;
-        refreshSolvingButtons(true);
-    }).fail(function (xhr, ajaxOptions, thrownError) {
-        showError("Start solving failed.", xhr);
-        refreshSolvingButtons(false);
-    }, "text");
-}
+// Build ride and route violations maps from analysis
+function buildRideViolationsMap() {
+    rideViolations.clear();
+    routeViolations.clear();
 
-function analyze() {
-    new bootstrap.Modal("#scoreAnalysisModal").show()
-    const scoreAnalysisModalContent = $("#scoreAnalysisModalContent");
-    scoreAnalysisModalContent.children().remove();
-    if (loadedSchedule.score == null) {
-        scoreAnalysisModalContent.text("No score to analyze yet, please first press the 'solve' button.");
-    } else {
-        $('#scoreAnalysisScoreLabel').text(`(${loadedSchedule.score})`);
-        $.put("/schedules/analyze", JSON.stringify(loadedSchedule), function (scoreAnalysis) {
-            let constraints = scoreAnalysis.constraints;
-            constraints.sort((a, b) => {
-                let aComponents = getScoreComponents(a.score), bComponents = getScoreComponents(b.score);
-                if (aComponents.hard < 0 && bComponents.hard > 0) return -1;
-                if (aComponents.hard > 0 && bComponents.soft < 0) return 1;
-                if (Math.abs(aComponents.hard) > Math.abs(bComponents.hard)) {
-                    return -1;
-                } else {
-                    if (aComponents.medium < 0 && bComponents.medium > 0) return -1;
-                    if (aComponents.medium > 0 && bComponents.medium < 0) return 1;
-                    if (Math.abs(aComponents.medium) > Math.abs(bComponents.medium)) {
-                        return -1;
-                    } else {
-                        if (aComponents.soft < 0 && bComponents.soft > 0) return -1;
-                        if (aComponents.soft > 0 && bComponents.soft < 0) return 1;
+    if (!currentAnalysis || !currentAnalysis.constraints) return;
 
-                        return Math.abs(bComponents.soft) - Math.abs(aComponents.soft);
+    currentAnalysis.constraints.forEach(constraint => {
+        // Skip constraints with no violations
+        if (constraint.score.startsWith('0')) return;
+        if (!constraint.matches) return;
+
+        constraint.matches.forEach(match => {
+            const violation = {
+                constraintName: constraint.name,
+                score: match.score,
+                justification: match.justification
+            };
+
+            // Add to ride violations
+            if (match.rideIds && match.rideIds.length > 0) {
+                match.rideIds.forEach(rideId => {
+                    if (!rideViolations.has(rideId)) {
+                        rideViolations.set(rideId, []);
                     }
+                    rideViolations.get(rideId).push(violation);
+                });
+            }
+
+            // Add to route violations
+            if (match.routeIds && match.routeIds.length > 0) {
+                match.routeIds.forEach(routeId => {
+                    if (!routeViolations.has(routeId)) {
+                        routeViolations.set(routeId, []);
+                    }
+                    routeViolations.get(routeId).push(violation);
+                });
+            }
+        });
+    });
+
+    // For route coverage violations, mark the specific unassigned rides as having violations
+    // These rides are "causing" the route coverage violation by not having trains assigned
+    if (currentSchedule && currentSchedule.rides) {
+        routeViolations.forEach((violations, routeId) => {
+            // Find all unassigned rides on this route
+            currentSchedule.rides.forEach(ride => {
+                const rideRouteId = getRouteId(ride.route);
+                if (rideRouteId === routeId && !ride.train) {
+                    // This unassigned ride is contributing to the route coverage violation
+                    violations.forEach(v => {
+                        if (!rideViolations.has(ride.id)) {
+                            rideViolations.set(ride.id, []);
+                        }
+                        // Add with a marker that it's from route coverage
+                        rideViolations.get(ride.id).push({
+                            ...v,
+                            isRouteCoverage: true
+                        });
+                    });
                 }
             });
-            constraints.map((e) => {
-                let components = getScoreComponents(e.weight);
-                e.type = components.hard != 0 ? 'hard' : (components.medium != 0 ? 'medium' : 'soft');
-                e.weight = components[e.type];
-                let scores = getScoreComponents(e.score);
-                e.implicitScore = scores.hard != 0 ? scores.hard : (scores.medium != 0 ? scores.medium : scores.soft);
-            });
-            scoreAnalysis.constraints = constraints;
-
-            scoreAnalysisModalContent.children().remove();
-            scoreAnalysisModalContent.text("");
-
-            const analysisTable = $(`<table class="table"/>`).css({textAlign: 'center'});
-            const analysisTHead = $(`<thead/>`).append($(`<tr/>`)
-                .append($(`<th></th>`))
-                .append($(`<th>Constraint</th>`).css({textAlign: 'left'}))
-                .append($(`<th>Type</th>`))
-                .append($(`<th># Matches</th>`))
-                .append($(`<th>Weight</th>`))
-                .append($(`<th>Score</th>`))
-                .append($(`<th></th>`)));
-            analysisTable.append(analysisTHead);
-            const analysisTBody = $(`<tbody/>`)
-            $.each(scoreAnalysis.constraints, (index, constraintAnalysis) => {
-                let icon = constraintAnalysis.type == "hard" && constraintAnalysis.implicitScore < 0 ? '<span class="fas fa-exclamation-triangle" style="color: red"></span>' : '';
-                if (!icon) icon = constraintAnalysis.matches.length == 0 ? '<span class="fas fa-check-circle" style="color: green"></span>' : '';
-
-                let row = $(`<tr/>`);
-                row.append($(`<td/>`).html(icon))
-                    .append($(`<td/>`).text(constraintAnalysis.name).css({textAlign: 'left'}))
-                    .append($(`<td/>`).text(constraintAnalysis.type))
-                    .append($(`<td/>`).html(`<b>${constraintAnalysis.matches.length}</b>`))
-                    .append($(`<td/>`).text(constraintAnalysis.weight))
-                    .append($(`<td/>`).text(constraintAnalysis.implicitScore));
-                analysisTBody.append(row);
-                row.append($(`<td/>`));
-            });
-            analysisTable.append(analysisTBody);
-            scoreAnalysisModalContent.append(analysisTable);
-        }).fail(function (xhr, ajaxOptions, thrownError) {
-            showError("Analyze failed.", xhr);
-        }, "text");
+        });
     }
 }
 
-function getScoreComponents(score) {
-    let components = {hard: 0, medium: 0, soft: 0};
-
-    $.each([...score.matchAll(/(-?[0-9]+)(hard|medium|soft)/g)], (i, parts) => {
-        components[parts[2]] = parseInt(parts[1], 10);
-    });
-
-    return components;
+// Get route ID from a route reference (handles both object and string ID)
+function getRouteId(routeRef) {
+    if (!routeRef) return null;
+    if (typeof routeRef === 'string') return routeRef;
+    if (typeof routeRef === 'object' && routeRef.id) return routeRef.id;
+    return null;
 }
 
-function refreshSolvingButtons(solving) {
-    if (solving) {
-        $("#solveButton").hide();
-        $("#stopSolvingButton").show();
-        if (autoRefreshIntervalId == null) {
-            autoRefreshIntervalId = setInterval(refreshSchedule, 2000);
+// Get train ID from a train reference
+function getTrainId(trainRef) {
+    if (!trainRef) return null;
+    if (typeof trainRef === 'string') return trainRef;
+    if (typeof trainRef === 'object' && trainRef.id) return trainRef.id;
+    return null;
+}
+
+// Get station name from a station reference
+function getStationName(stationRef) {
+    if (!stationRef) return '?';
+    if (typeof stationRef === 'string') {
+        const station = stationMap.get(stationRef);
+        return station ? station.name : stationRef;
+    }
+    if (typeof stationRef === 'object') {
+        return stationRef.name || stationRef.id || '?';
+    }
+    return '?';
+}
+
+// API Functions
+async function loadDemoData() {
+    try {
+        btnLoadDemo.disabled = true;
+        btnLoadDemo.innerHTML = '<div class="spinner"></div> Loading...';
+
+        const response = await fetch('/rolling-stock/demo-data');
+        if (!response.ok) throw new Error('Failed to load demo data');
+
+        currentSchedule = await response.json();
+        currentJobId = null;
+
+        buildLookupMaps();
+        updateUI();
+        btnSolve.disabled = false;
+
+        // Also analyze the initial schedule
+        await analyzeSchedule();
+
+    } catch (error) {
+        console.error('Error loading demo data:', error);
+        alert('Failed to load demo data: ' + error.message);
+    } finally {
+        btnLoadDemo.disabled = false;
+        btnLoadDemo.innerHTML = `
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+            </svg>
+            Load Demo Data
+        `;
+    }
+}
+
+async function startSolving() {
+    if (!currentSchedule) return;
+
+    try {
+        btnSolve.disabled = true;
+        btnSolve.classList.add('hidden');
+        btnStop.classList.remove('hidden');
+        btnStop.disabled = false;
+        solvingIndicator.classList.remove('hidden');
+        solvingIndicator.classList.add('flex');
+
+        updateStatus('SOLVING_ACTIVE');
+
+        const response = await fetch('/rolling-stock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(currentSchedule)
+        });
+
+        if (!response.ok) throw new Error('Failed to start solving');
+
+        currentJobId = await response.text();
+        solveStartTime = Date.now();
+
+        // Start polling and countdown
+        startPolling();
+        startCountdown();
+
+    } catch (error) {
+        console.error('Error starting solver:', error);
+        alert('Failed to start solving: ' + error.message);
+        resetSolvingUI();
+    }
+}
+
+async function stopSolving() {
+    if (!currentJobId) return;
+
+    try {
+        btnStop.disabled = true;
+
+        await fetch(`/rolling-stock/${currentJobId}`, { method: 'DELETE' });
+
+        stopPolling();
+        stopCountdown();
+        resetSolvingUI();
+
+        // Small delay to let solver finish terminating
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Fetch final solution and update UI
+        await fetchSolution();
+        await analyzeSchedule();
+
+    } catch (error) {
+        console.error('Error stopping solver:', error);
+    }
+}
+
+function startPolling() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    pollingInterval = setInterval(pollStatus, POLL_INTERVAL_MS);
+    // Also poll immediately
+    pollStatus();
+}
+
+function stopPolling() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
+}
+
+function startCountdown() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    updateCountdown();
+    countdownInterval = setInterval(updateCountdown, 1000);
+}
+
+function stopCountdown() {
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+}
+
+function updateCountdown() {
+    if (!solveStartTime) return;
+
+    const elapsed = Math.floor((Date.now() - solveStartTime) / 1000);
+    const remaining = Math.max(0, SOLVER_TIMEOUT_SECONDS - elapsed);
+
+    const indicatorText = solvingIndicator.querySelector('span');
+    if (indicatorText) {
+        indicatorText.textContent = `Solving... ${remaining}s remaining`;
+    }
+
+    if (remaining <= 0) {
+        stopCountdown();
+    }
+}
+
+async function pollStatus() {
+    if (!currentJobId) return;
+
+    try {
+        // Fetch full solution to get real-time updates
+        const response = await fetch(`/rolling-stock/${currentJobId}`);
+        if (!response.ok) throw new Error('Failed to get solution');
+
+        const solution = await response.json();
+        currentSchedule = solution;
+        buildLookupMaps();
+
+        // Update score
+        if (solution.score) {
+            scoreValue.textContent = solution.score;
+            scoreValue.className = getScoreClass(solution.score);
         }
+
+        // Update timetable and statistics
+        updateStatistics();
+
+        // Also update constraint analysis during solving
+        await analyzeSchedule();
+
+        renderTimetable();
+
+        // Check if solving is complete
+        if (solution.solverStatus === 'NOT_SOLVING') {
+            stopPolling();
+            stopCountdown();
+            resetSolvingUI();
+        }
+
+    } catch (error) {
+        console.error('Error polling status:', error);
+    }
+}
+
+async function fetchSolution() {
+    if (!currentJobId) return;
+
+    try {
+        const response = await fetch(`/rolling-stock/${currentJobId}`);
+        if (!response.ok) throw new Error('Failed to fetch solution');
+
+        currentSchedule = await response.json();
+        buildLookupMaps();
+        updateUI();
+
+    } catch (error) {
+        console.error('Error fetching solution:', error);
+    }
+}
+
+async function analyzeSchedule() {
+    if (!currentSchedule) return;
+
+    try {
+        let response;
+
+        // If we have a job ID, use the job-based analysis endpoint for consistency
+        // This avoids JSON serialization issues with @JsonIdentityInfo
+        if (currentJobId) {
+            response = await fetch(`/rolling-stock/${currentJobId}/analysis`);
+        } else {
+            // For initial analysis (before solving), send the schedule
+            response = await fetch('/rolling-stock/analyze', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(currentSchedule)
+            });
+        }
+
+        if (!response.ok) throw new Error('Failed to analyze schedule');
+
+        currentAnalysis = await response.json();
+        buildRideViolationsMap();
+        renderConstraints(currentAnalysis);
+
+    } catch (error) {
+        console.error('Error analyzing schedule:', error);
+    }
+}
+
+// UI Functions
+function updateUI() {
+    if (!currentSchedule) return;
+
+    updateStatistics();
+    updateScore();
+    updateRouteFilter();
+    renderTimetable();
+}
+
+function updateStatistics() {
+    const routes = currentSchedule.routes || [];
+    const trains = currentSchedule.trains || [];
+    const rides = currentSchedule.rides || [];
+
+    const assignedRides = rides.filter(r => r.train != null);
+    const unassignedRides = rides.filter(r => r.train == null);
+
+    statRoutes.textContent = routes.length;
+    statTrains.textContent = trains.length;
+    statRides.textContent = rides.length;
+    statAssigned.textContent = assignedRides.length;
+    statUnassigned.textContent = unassignedRides.length;
+}
+
+function updateScore() {
+    const score = currentSchedule.score;
+    if (score) {
+        scoreValue.textContent = score;
+        scoreValue.className = getScoreClass(score);
     } else {
-        $("#solveButton").show();
-        $("#stopSolvingButton").hide();
-        if (autoRefreshIntervalId != null) {
-            clearInterval(autoRefreshIntervalId);
-            autoRefreshIntervalId = null;
-        }
+        scoreValue.textContent = '-';
+        scoreValue.className = 'text-lg font-mono font-bold text-gray-400';
+    }
+
+    const status = currentSchedule.solverStatus || 'NOT_SOLVING';
+    updateStatus(status);
+}
+
+function updateStatus(status) {
+    statusBadge.textContent = formatStatus(status);
+    statusBadge.className = 'px-3 py-1 rounded-full text-sm font-medium ' + getStatusClass(status);
+}
+
+function formatStatus(status) {
+    switch (status) {
+        case 'NOT_SOLVING': return 'Ready';
+        case 'SOLVING_ACTIVE': return 'Solving...';
+        case 'SOLVING_SCHEDULED': return 'Scheduled';
+        default: return status;
     }
 }
 
-function stopSolving() {
-    $.delete("/schedules/" + scheduleId, function () {
-        refreshSolvingButtons(false);
-        refreshSchedule();
-    }).fail(function (xhr, ajaxOptions, thrownError) {
-        showError("Stop solving failed.", xhr);
+function getStatusClass(status) {
+    switch (status) {
+        case 'SOLVING_ACTIVE': return 'bg-blue-100 text-blue-800';
+        case 'SOLVING_SCHEDULED': return 'bg-yellow-100 text-yellow-800';
+        default: return 'bg-gray-200 text-gray-700';
+    }
+}
+
+function getScoreClass(score) {
+    const baseClass = 'text-lg font-mono font-bold ';
+    if (!score) return baseClass + 'text-gray-400';
+    if (score.includes('-') && score.includes('hard')) {
+        return baseClass + 'text-red-600';
+    }
+    if (score.startsWith('0hard')) {
+        return baseClass + 'text-green-600';
+    }
+    return baseClass + 'text-yellow-600';
+}
+
+function updateRouteFilter() {
+    const routes = currentSchedule.routes || [];
+    routeFilter.innerHTML = '<option value="all">All Routes</option>';
+
+    routes.forEach(route => {
+        const option = document.createElement('option');
+        option.value = route.id;
+        option.textContent = route.name;
+        routeFilter.appendChild(option);
     });
 }
 
-function copyTextToClipboard(id) {
-    var text = $("#" + id).text().trim();
+function renderTimetable() {
+    if (!currentSchedule) return;
 
-    var dummy = document.createElement("textarea");
-    document.body.appendChild(dummy);
-    dummy.value = text;
-    dummy.select();
-    document.execCommand("copy");
-    document.body.removeChild(dummy);
-}
+    const selectedRoute = routeFilter.value;
+    const routes = currentSchedule.routes || [];
+    const rides = currentSchedule.rides || [];
 
-function showError(title, xhr) {
-    let serverErrorMessage = !xhr.responseJSON ? `${xhr.status}: ${xhr.statusText}` : xhr.responseJSON.message;
-    let serverErrorCode = !xhr.responseJSON ? `unknown` : xhr.responseJSON.code;
-    let serverErrorId = !xhr.responseJSON ? `----` : xhr.responseJSON.id;
-    let serverErrorDetails = !xhr.responseJSON ? `no details provided` : xhr.responseJSON.details;
+    // Filter routes
+    const filteredRoutes = selectedRoute === 'all'
+        ? routes
+        : routes.filter(r => r.id === selectedRoute);
 
-    if (xhr.responseJSON && !serverErrorMessage) {
-        serverErrorMessage = JSON.stringify(xhr.responseJSON);
-        serverErrorCode = xhr.statusText + '(' + xhr.status + ')';
-        serverErrorId = `----`;
+    if (filteredRoutes.length === 0) {
+        timetableContainer.innerHTML = `
+            <div class="text-center text-gray-500 py-12">
+                <p>No routes to display</p>
+            </div>
+        `;
+        return;
     }
 
-    console.error(title + "\n" + serverErrorMessage + " : " + serverErrorDetails);
-    const notification = $(`<div class="toast" role="alert" aria-live="assertive" aria-atomic="true" style="min-width: 50rem"/>`)
-        .append($(`<div class="toast-header bg-danger">
-                 <strong class="me-auto text-dark">Error</strong>
-                 <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-               </div>`))
-        .append($(`<div class="toast-body"/>`)
-            .append($(`<p/>`).text(title))
-            .append($(`<pre/>`)
-                .append($(`<code/>`).text(serverErrorMessage + "\n\nCode: " + serverErrorCode + "\nError id: " + serverErrorId))
-            )
-        );
-    $("#notificationPanel").append(notification);
-    notification.toast({delay: 30000});
-    notification.toast('show');
+    timetableContainer.innerHTML = '';
+
+    filteredRoutes.forEach(route => {
+        // Match rides to route - handle both object and string ID references
+        const routeRides = rides.filter(r => {
+            const rideRouteId = getRouteId(r.route);
+            return rideRouteId === route.id;
+        });
+        const routeSection = createRouteSection(route, routeRides);
+        timetableContainer.appendChild(routeSection);
+    });
 }
+
+function createRouteSection(route, routeRides) {
+    const section = document.createElement('div');
+    const hasRouteViolation = routeViolations.has(route.id);
+
+    // Style the section based on whether the route has violations
+    if (hasRouteViolation) {
+        section.className = 'border-2 border-red-400 rounded-lg p-4 bg-red-50 mb-4';
+    } else {
+        section.className = 'border rounded-lg p-4 bg-gray-50 mb-4';
+    }
+
+    // Route header
+    const header = document.createElement('div');
+    header.className = 'flex justify-between items-center mb-3';
+
+    const violations = routeViolations.get(route.id) || [];
+    const violationBadge = hasRouteViolation
+        ? `<span class="ml-2 px-2 py-1 text-xs bg-red-500 text-white rounded">${violations.length} violation${violations.length > 1 ? 's' : ''}</span>`
+        : '';
+
+    header.innerHTML = `
+        <div class="flex items-center">
+            <h3 class="font-semibold ${hasRouteViolation ? 'text-red-700' : 'text-gray-800'}">${route.name}</h3>
+            ${violationBadge}
+        </div>
+        <span class="text-sm text-gray-500">${routeRides.length} rides</span>
+    `;
+    section.appendChild(header);
+
+    // Group rides by train
+    const ridesByTrain = new Map();
+    const unassignedRides = [];
+
+    routeRides.forEach(ride => {
+        const trainId = getTrainId(ride.train);
+        if (trainId) {
+            if (!ridesByTrain.has(trainId)) {
+                ridesByTrain.set(trainId, []);
+            }
+            ridesByTrain.get(trainId).push(ride);
+        } else {
+            unassignedRides.push(ride);
+        }
+    });
+
+    // Render train rows
+    const trainRows = document.createElement('div');
+    trainRows.className = 'space-y-2';
+
+    if (ridesByTrain.size === 0 && unassignedRides.length === 0) {
+        trainRows.innerHTML = '<p class="text-sm text-gray-400 italic">No rides for this route</p>';
+    }
+
+    ridesByTrain.forEach((trainRides, trainId) => {
+        const train = trainMap.get(trainId);
+        const trainRow = createTrainRow(trainId, train, trainRides);
+        trainRows.appendChild(trainRow);
+    });
+
+    // Render unassigned rides
+    if (unassignedRides.length > 0) {
+        const unassignedRow = createUnassignedRow(unassignedRides);
+        trainRows.appendChild(unassignedRow);
+    }
+
+    section.appendChild(trainRows);
+    return section;
+}
+
+function createTrainRow(trainId, train, rides) {
+    const row = document.createElement('div');
+    row.className = 'train-row flex items-center gap-2 bg-white p-2 rounded border';
+
+    // Train label
+    const label = document.createElement('div');
+    label.className = 'w-24 flex-shrink-0 font-medium text-sm text-gray-700';
+    label.textContent = `Train-${trainId}`;
+    if (train) {
+        label.title = `Capacity: ${train.capacity}`;
+    }
+    row.appendChild(label);
+
+    // Rides container
+    const ridesContainer = document.createElement('div');
+    ridesContainer.className = 'flex flex-wrap gap-1 flex-1';
+
+    // Sort rides by departure time
+    rides.sort((a, b) => {
+        if (!a.departureTime || !b.departureTime) return 0;
+        return a.departureTime.localeCompare(b.departureTime);
+    });
+
+    rides.forEach(ride => {
+        const hasViolation = rideViolations.has(ride.id);
+        const status = hasViolation ? 'violation' : 'assigned';
+        const rideBlock = createRideBlock(ride, status);
+        ridesContainer.appendChild(rideBlock);
+    });
+
+    row.appendChild(ridesContainer);
+    return row;
+}
+
+function createUnassignedRow(rides) {
+    const row = document.createElement('div');
+    row.className = 'train-row flex items-center gap-2 bg-red-50 p-2 rounded border border-red-200';
+
+    // Label
+    const label = document.createElement('div');
+    label.className = 'w-24 flex-shrink-0 font-medium text-sm text-red-600';
+    label.textContent = 'Unassigned';
+    row.appendChild(label);
+
+    // Rides container
+    const ridesContainer = document.createElement('div');
+    ridesContainer.className = 'flex flex-wrap gap-1 flex-1';
+
+    rides.forEach(ride => {
+        // Check if this unassigned ride has violations (from route coverage constraints)
+        const hasViolation = rideViolations.has(ride.id);
+        const status = hasViolation ? 'violation' : 'unassigned';
+        const rideBlock = createRideBlock(ride, status);
+        ridesContainer.appendChild(rideBlock);
+    });
+
+    row.appendChild(ridesContainer);
+    return row;
+}
+
+function createRideBlock(ride, status) {
+    const block = document.createElement('div');
+    block.className = `ride-block ride-${status} cursor-pointer`;
+    block.dataset.rideId = ride.id;
+
+    const depStation = getStationName(ride.departureStation);
+    const arrStation = getStationName(ride.arrivalStation);
+    const depTime = ride.departureTime ? formatTime(ride.departureTime) : '';
+
+    block.textContent = `${depTime} ${depStation} → ${arrStation}`;
+
+    // Enhanced tooltip
+    let tooltipText = `Ride ${ride.id}\n${depStation} → ${arrStation}\n${ride.departureTime || ''} - ${ride.arrivalTime || ''}`;
+
+    // Show violations
+    const violations = rideViolations.get(ride.id);
+    if (violations && violations.length > 0) {
+        tooltipText += '\n\nViolations:';
+        violations.forEach(v => {
+            tooltipText += `\n- ${v.constraintName}: ${v.score}`;
+        });
+    }
+
+    block.title = tooltipText;
+
+    // Click handler to show detailed constraint info
+    block.addEventListener('click', () => showRideDetails(ride.id));
+
+    return block;
+}
+
+function formatTime(isoDateTime) {
+    if (!isoDateTime) return '';
+    try {
+        const date = new Date(isoDateTime);
+        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch {
+        return '';
+    }
+}
+
+function showRideDetails(rideId) {
+    selectedRideId = rideId;
+    const ride = rideMap.get(rideId);
+
+    if (!ride) {
+        console.error('Ride not found:', rideId);
+        return;
+    }
+
+    const depStation = getStationName(ride.departureStation);
+    const arrStation = getStationName(ride.arrivalStation);
+    const trainId = getTrainId(ride.train);
+    const train = trainId ? trainMap.get(trainId) : null;
+    const violations = rideViolations.get(rideId) || [];
+
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('ride-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ride-modal';
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        document.body.appendChild(modal);
+    }
+
+    const hasViolations = violations.length > 0;
+    const headerColor = hasViolations ? 'bg-red-600' : 'bg-blue-600';
+
+    modal.innerHTML = `
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden">
+            <div class="${headerColor} text-white p-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-semibold">Ride ${rideId}</h3>
+                    <button onclick="closeRideModal()" class="text-white hover:text-gray-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="p-4 overflow-y-auto max-h-[60vh]">
+                <!-- Ride Details -->
+                <div class="mb-4">
+                    <h4 class="font-medium text-gray-700 mb-2">Details</h4>
+                    <div class="bg-gray-50 rounded p-3 space-y-1 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Route:</span>
+                            <span>${depStation} → ${arrStation}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Departure:</span>
+                            <span>${ride.departureTime || '-'}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Arrival:</span>
+                            <span>${ride.arrivalTime || '-'}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Assigned Train:</span>
+                            <span>${trainId ? `Train-${trainId} (capacity: ${train?.capacity || '?'})` : 'Not assigned'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Constraint Violations -->
+                <div>
+                    <h4 class="font-medium text-gray-700 mb-2">Constraint Analysis</h4>
+                    ${!hasViolations
+                        ? '<div class="bg-green-50 border border-green-200 rounded p-3 text-green-700 text-sm">No constraint violations for this ride</div>'
+                        : `<div class="space-y-2">
+                            ${violations.map(v => `
+                                <div class="bg-red-50 border border-red-200 rounded p-3">
+                                    <div class="flex justify-between items-start">
+                                        <span class="font-medium text-red-700">${v.constraintName}</span>
+                                        <span class="text-sm font-mono text-red-600">${v.score}</span>
+                                    </div>
+                                    ${v.justification ? `<div class="text-xs text-gray-500 mt-1 break-all">${escapeHtml(v.justification)}</div>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>`
+                    }
+                </div>
+            </div>
+            <div class="border-t p-3 flex justify-end">
+                <button onclick="closeRideModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded text-gray-700">
+                    Close
+                </button>
+            </div>
+        </div>
+    `;
+
+    modal.classList.remove('hidden');
+}
+
+function closeRideModal() {
+    const modal = document.getElementById('ride-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+    selectedRideId = null;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function renderConstraints(analysis) {
+    if (!analysis || !analysis.constraints) {
+        constraintContainer.innerHTML = `
+            <div class="text-center text-gray-500 py-8">
+                <p class="text-sm">No constraint data available</p>
+            </div>
+        `;
+        return;
+    }
+
+    constraintContainer.innerHTML = '';
+
+    // Overall score
+    const scoreHeader = document.createElement('div');
+    scoreHeader.className = 'mb-4 p-3 bg-gray-100 rounded-lg';
+    scoreHeader.innerHTML = `
+        <div class="text-sm text-gray-500">Overall Score</div>
+        <div class="text-xl font-mono font-bold ${getScoreClass(analysis.score)}">${analysis.score}</div>
+    `;
+    constraintContainer.appendChild(scoreHeader);
+
+    // Sort constraints: hard violations first, then soft
+    const constraints = [...analysis.constraints].sort((a, b) => {
+        const aIsHard = a.score.includes('hard');
+        const bIsHard = b.score.includes('hard');
+        const aHasViolation = !a.score.startsWith('0');
+        const bHasViolation = !b.score.startsWith('0');
+
+        if (aIsHard && aHasViolation && (!bIsHard || !bHasViolation)) return -1;
+        if (bIsHard && bHasViolation && (!aIsHard || !aHasViolation)) return 1;
+        return b.matchCount - a.matchCount;
+    });
+
+    constraints.forEach(constraint => {
+        const item = createConstraintItem(constraint);
+        constraintContainer.appendChild(item);
+    });
+}
+
+function createConstraintItem(constraint) {
+    const isHard = constraint.score.includes('hard');
+    const hasViolation = !constraint.score.startsWith('0');
+
+    let itemClass = 'constraint-ok';
+    if (hasViolation) {
+        itemClass = isHard ? 'constraint-hard' : 'constraint-soft';
+    }
+
+    const item = document.createElement('div');
+    item.className = `constraint-item ${itemClass} p-3 rounded-r-lg mb-2`;
+
+    const icon = hasViolation
+        ? (isHard ? '&#x26A0;' : '&#x26A0;')
+        : '&#x2714;';
+
+    // Build match details if available
+    let matchDetails = '';
+    if (constraint.matches && constraint.matches.length > 0 && hasViolation) {
+        const matchItems = constraint.matches.slice(0, 5).map(match => {
+            const rideLinks = (match.rideIds || []).map(id =>
+                `<span class="text-blue-600 hover:underline cursor-pointer" onclick="showRideDetails('${id}')">Ride ${id}</span>`
+            ).join(', ');
+            return `<div class="text-xs text-gray-600">• ${rideLinks || 'Unknown rides'}: ${match.score}</div>`;
+        }).join('');
+
+        const moreCount = constraint.matches.length - 5;
+        matchDetails = `
+            <div class="mt-2 pl-6 space-y-1">
+                ${matchItems}
+                ${moreCount > 0 ? `<div class="text-xs text-gray-400">... and ${moreCount} more</div>` : ''}
+            </div>
+        `;
+    }
+
+    item.innerHTML = `
+        <div class="flex justify-between items-start">
+            <div>
+                <span class="mr-2">${icon}</span>
+                <span class="font-medium">${constraint.name}</span>
+            </div>
+            <span class="text-sm font-mono ${hasViolation ? (isHard ? 'text-red-600' : 'text-yellow-600') : 'text-green-600'}">${constraint.score}</span>
+        </div>
+        <div class="text-sm text-gray-500 mt-1 ml-6">
+            ${constraint.matchCount} match${constraint.matchCount !== 1 ? 'es' : ''}
+        </div>
+        ${matchDetails}
+    `;
+
+    return item;
+}
+
+function resetSolvingUI() {
+    btnSolve.disabled = false;
+    btnSolve.classList.remove('hidden');
+    btnStop.classList.add('hidden');
+    btnStop.disabled = true;
+    solvingIndicator.classList.add('hidden');
+    solvingIndicator.classList.remove('flex');
+
+    // Reset countdown text
+    const indicatorText = solvingIndicator.querySelector('span');
+    if (indicatorText) {
+        indicatorText.textContent = 'Solving...';
+    }
+
+    solveStartTime = null;
+    updateStatus('NOT_SOLVING');
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('Rolling Stock Schedule Optimization UI initialized');
+});

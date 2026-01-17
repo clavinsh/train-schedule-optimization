@@ -26,7 +26,8 @@ import org.acme.RollingStockRosteringOptimization.domain.Train;
 public class DemoDataGenerator {
 
     private static final double DISTANCE_BETWEEN_STATIONS_KM = 10.0;
-    private static final int[] TRAIN_CAPACITIES = {500, 500, 500, 500, 500};
+    // private static final int[] TRAIN_CAPACITIES = {500, 500, 500, 500, 500};
+    private static final int[] TRAIN_CAPACITIES = {550};
     private static final int RIDES_PER_ROUTE_MIN = 8;
     private static final int RIDES_PER_ROUTE_MAX = 12;
     private static final int TRAIN_COUNT = 40;

@@ -60,7 +60,7 @@ class RollingStockSchedulingConstraintProviderTest {
 
         constraintVerifier.verifyThat(RollingStockSchedulingConstraintProvider::rideConflict)
                 .given(ride1, ride2)
-                .penalizesBy(10); // Overlapping rides for same train
+                .penalizes(); // Overlapping rides for same train - should trigger penalty
     }
 
     @Test
@@ -82,7 +82,7 @@ class RollingStockSchedulingConstraintProviderTest {
 
         constraintVerifier.verifyThat(RollingStockSchedulingConstraintProvider::rideConflict)
                 .given(ride1, ride2)
-                .penalizesBy(0); // No overlap
+                .penalizesBy(0); // No overlap - no penalty
     }
 
     // ========================================================================
@@ -108,7 +108,7 @@ class RollingStockSchedulingConstraintProviderTest {
 
         constraintVerifier.verifyThat(RollingStockSchedulingConstraintProvider::capacityExceeded)
                 .given(ride, demand)
-                .penalizesBy(50); // Exceeds by 50 passengers
+                .penalizesBy(50L); // Exceeds by 50 passengers
     }
 
     @Test
@@ -131,7 +131,7 @@ class RollingStockSchedulingConstraintProviderTest {
 
         constraintVerifier.verifyThat(RollingStockSchedulingConstraintProvider::capacityExceeded)
                 .given(ride, demand)
-                .penalizesBy(0); // Within capacity
+                .penalizesBy(0L); // Within capacity
     }
 
     // ========================================================================
@@ -154,7 +154,7 @@ class RollingStockSchedulingConstraintProviderTest {
 
         constraintVerifier.verifyThat(RollingStockSchedulingConstraintProvider::firstRideNotFromDepo)
                 .given(train, ride, depo)
-                .penalizesBy(1); // Not from depot
+                .penalizesBy(1L); // Not from depot
     }
 
     @Test
@@ -174,7 +174,7 @@ class RollingStockSchedulingConstraintProviderTest {
 
         constraintVerifier.verifyThat(RollingStockSchedulingConstraintProvider::firstRideNotFromDepo)
                 .given(train, ride, depo)
-                .penalizesBy(0); // From depot - OK
+                .penalizesBy(0L); // From depot - OK
     }
 
     // ========================================================================

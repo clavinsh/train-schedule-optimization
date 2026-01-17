@@ -88,41 +88,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- UI -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-web-dependency-locator</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.webjars</groupId>
-            <artifactId>bootstrap</artifactId>
-            <version>5.3.8</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.webjars</groupId>
-            <artifactId>jquery</artifactId>
-            <version>3.7.1</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.webjars</groupId>
-            <artifactId>font-awesome</artifactId>
-            <version>7.1.0</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.webjars.npm</groupId>
-            <artifactId>js-joda</artifactId>
-            <version>1.11.0</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.webjars.npm</groupId>
-            <artifactId>js-joda__locale_en-us</artifactId>
-            <version>3.1.0</version>
-            <scope>runtime</scope>
-        </dependency>
+        <!-- UI - static resources served from META-INF/resources -->
     </dependencies>
 
     <build>
