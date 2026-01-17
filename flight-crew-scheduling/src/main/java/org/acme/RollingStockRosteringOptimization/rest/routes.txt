@@ -1,0 +1,169 @@
+       // For now assume that the distance between each connected station is 10 km.
+       // Rīga (Connected with Vagonu parks, Torņakalns, Zemitāni)
+
+        // Route: Rīga - Indra | Zilupe | Gulbene
+        // Stations:
+        // Vagonu parks
+        // Jāņavārti
+        // Daugmale
+        // Šķirotava
+        // Gaisma
+        // Rumbula
+        // Dārziņi
+        // Dole
+        // Salspils
+        // Saulkalne
+        // Ikšķile
+        // Jaunogre
+        // Ogre
+        // Pārogre
+        // Ciemupe
+        // Ķegums
+        // Lielvārde
+        // Kaibala
+        // Jumprava
+        // Skrīveri
+        // Muldakmens
+        // Aizkraukle
+        // Koknese
+        // Alotene
+        // Pļaviņas
+        // Krustpils (Connected with Pļaviņas, Trepe, Kūkas and Jaunskalsnava)
+
+        // Route: Rīga - Indra
+        // Stations:
+        // Trepe
+        // Līvāni
+        // Jersika
+        // Nīcgale
+        // Vabole
+        // Līksna
+        // Daugavpils
+        // Krāslava
+        // Indra
+
+        // Route: Rīga - Zilupe
+        // Stations:
+        // Kūkas
+        // Mežāre
+        // Atašiene
+        // Stirniene
+        // Varakļāņi
+        // Viļāni
+        // Sakstagals
+        // Rēzekne
+        // Taudejāņi
+        // Cirma
+        // Ludza
+        // Istalsna
+        // Nerza
+        // Briģi
+        // Zilupe
+
+        // Route: Rīga - Gulbene
+        // Stations:
+        // Jaunkalsnava
+        // Kalsnava
+        // Mārciena
+        // Madona
+        // Cesvaine
+        // Jaungulbene
+        // Gulbene
+
+        // Route: Rīga - Liepāja | Tukums II
+        // Stations:
+        // Torņakalns (Connected with Rīga, Bieriņi / Bērnu slimnīca and Zasulauks)
+
+        // Route: Rīga - Liepāja
+        // Stations:
+        // Bieriņi / Bērnu slimnīca
+        // BA Turība
+        // Tīraine
+        // Medemciems
+        // Jaunolaine
+        // Olaine
+        // Dalbe
+        // Cena
+        // Ozolnieki
+        // Cukurfabrika
+        // Jelgava
+        // Dobele
+        // Biksti
+        // Saldus
+        // Skrunda
+        // Liepāja
+
+        // Route: Rīga - Tukums II
+        // Stations:
+        // Zasulauks
+        // Depo
+        // Zolitūde
+        // Imanta
+        // Babīte
+        // Priedaine
+        // Lielupe
+        // Bulduri
+        // Dzintari
+        // Majori
+        // Dubulti
+        // Jaundubulti
+        // Pumpuri
+        // Melluži
+        // Asari
+        // Vaivari
+        // Sloka
+        // Kūdra
+        // Ķemeri
+        // Smārde
+        // Milzkalne
+        // Tukums I
+        // Tukums II
+
+        // Route: Rīga - Valga | Skulte
+        // Stations:
+        // Zemitāni (Connected with Rīga, Čiekurkalns and Brasa)
+
+        // Route: Rīga - Valga
+        // Stations:
+        // Čiekurkalns
+        // Šmerlis
+        // Jugla
+        // Garkalne
+        // Krievupe
+        // Vangaži
+        // Inčukalns
+        // Egļupe
+        // Sigulda
+        // Līgatne
+        // Ieriķi
+        // Melturi
+        // Āraiši
+        // Cēsis
+        // Jānamuiža
+        // Lode
+        // Valmiera
+        // Strenči
+        // Lugaži
+        // Valga
+
+        // Route: Rīga - Skulte
+        // Stations:
+        // Brasa
+        // Sarkandaugava
+        // Dauderi
+        // Mangaļi
+        // Ziemeļblāzma
+        // Vecdaugava
+        // Vecāķi
+        // Kalngale
+        // Garciems
+        // Garupe
+        // Carnikava
+        // Gauja
+        // Lilaste
+        // Inčupe
+        // Pabaži
+        // Saulkrasti
+        // Ķīšupe
+        // Zvejniekciems
+        // Skulte
