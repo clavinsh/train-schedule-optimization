@@ -9,7 +9,7 @@
 
     <!-- Configure the optimization algorithms (optional) -->
     <termination>
-        <secondsSpentLimit>30</secondsSpentLimit>
+        <secondsSpentLimit>45</secondsSpentLimit>
     </termination>
 
     <constructionHeuristic>
@@ -18,10 +18,10 @@
     <localSearch>
         <swapMoveSelector/>
         <acceptor>
-            <simulatedAnnealingStartingTemperature>100hard/500soft</simulatedAnnealingStartingTemperature>
+            <simulatedAnnealingStartingTemperature>4hard/100soft</simulatedAnnealingStartingTemperature>
         </acceptor>
         <forager>
-            <acceptedCountLimit>1</acceptedCountLimit>
+            <acceptedCountLimit>4</acceptedCountLimit>
         </forager>
     </localSearch>
 </solver>

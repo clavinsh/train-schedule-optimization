@@ -9,7 +9,7 @@ let solveStartTime = null;
 let selectedRideId = null;
 let isSolving = false; // Flag to track solving state
 const POLL_INTERVAL_MS = 2000;
-const SOLVER_TIMEOUT_SECONDS = 30; // From rollingStockSolverConfig.xml
+const SOLVER_TIMEOUT_SECONDS = 45; // From rollingStockSolverConfig.xml
 
 // Lookup maps for resolving JSON identity references
 let routeMap = new Map();

@@ -70,7 +70,7 @@ public class RollingStockSchedulingConstraintProvider implements ConstraintProvi
                     int boardingDemand = demand.getDemandAtHour(hour);
                     return boardingDemand > ride.getTrain().getCapacity();
                 })
-                .penalize(HardSoftLongScore.ofHard(1),
+                .penalize(HardSoftLongScore.ofHard(2),
                         (ride, demand) -> {
                             int hour = ride.getDepartureTime().getHour();
                             int boardingDemand = demand.getDemandAtHour(hour);
@@ -93,7 +93,7 @@ public class RollingStockSchedulingConstraintProvider implements ConstraintProvi
                 // Penalize if departure station is not at any depot
                 .ifNotExists(Depo.class,
                         equal((train, ride) -> ride.getDepartureStation(), Depo::getStation))
-                .penalize(HardSoftLongScore.ofHard(1))
+                .penalize(HardSoftLongScore.ofHard(3))
                 .asConstraint("First ride not departing from depot");
     }
 
@@ -111,7 +111,7 @@ public class RollingStockSchedulingConstraintProvider implements ConstraintProvi
                 // Penalize if arrival station is not at any depot
                 .ifNotExists(Depo.class,
                         equal((train, ride) -> ride.getArrivalStation(), Depo::getStation))
-                .penalize(HardSoftLongScore.ofHard(1))
+                .penalize(HardSoftLongScore.ofHard(3))
                 .asConstraint("Last ride not arriving at depot");
     }
 

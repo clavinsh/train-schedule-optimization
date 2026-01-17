@@ -25,15 +25,19 @@ import org.acme.RollingStockRosteringOptimization.domain.Train;
 @ApplicationScoped
 public class DemoDataGenerator {
 
-    private static final double DISTANCE_BETWEEN_STATIONS_KM = 10.0;
+    private static final double DISTANCE_BETWEEN_STATIONS_KM = 5.0;
     // private static final int[] TRAIN_CAPACITIES = {500, 500, 500, 500, 500};
     private static final int[] TRAIN_CAPACITIES = {550};
     private static final int RIDES_PER_ROUTE_MIN = 8;
     private static final int RIDES_PER_ROUTE_MAX = 12;
-    private static final int TRAIN_COUNT = 35;
+    private static final int TRAIN_COUNT = 100;
 
     // Depot locations (hard-coded as these are infrastructure decisions)
-    private static final List<String> DEPOT_STATIONS = List.of("Rīga", "Krustpils", "Jelgava", "Daugavpils", "Rēzekne");
+    private static final List<String> DEPOT_STATIONS = List.of("Rīga", "Krustpils", "Jelgava", "Daugavpils", "Rēzekne"
+    // "Liepāja", "Sigulda", "Cēsis", "Valmiera", "Ogre", "Majori", "Gulbene", "Skrīveri", "Zilupe", "Skulte", "Tukums II", "Tukums I",
+    // "Vagonu parks", "Jāņavārti", "Daugmale", "Šķirotava", "Gaisma", "Rumbula", "Dārziņi", "Dole", "Salaspils", "Saulkalne", "Ikšķile", "Jaunogre", "Ciemupe",
+    // "Ķegums", "Lielvārde", "Kaibala", "Jumprava", "Muldakmens", "Aizkraukle", "Koknese", "Alotene", "Pļaviņas", "Krustpils", "Trepe", "Līvāni"
+);
 
     // Major hubs with higher passenger demand
     private static final Set<String> MAJOR_HUBS = Set.of(
