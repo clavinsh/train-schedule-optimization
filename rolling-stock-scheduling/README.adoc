@@ -1,8 +1,6 @@
-= Flight Crew Scheduling (Java, Quarkus, Maven)
+= Rolling Stock Scheduling (Java, Quarkus, Maven)
 
-Assign crew to flights to produce a better schedule for flight assignments.
-
-image::./flight-crew-scheduling-screenshot.png[]
+Assign rolling stock to train routes to produce an optimized schedule for train operations.
 
 * <<run,Run the application>>
 * <<enterprise,Run the application with Timefold Solver Enterprise Edition>>
@@ -22,13 +20,11 @@ $ sdk install maven
 [[run]]
 == Run the application
 
-. Git clone the timefold-quickstarts repo and navigate to this directory:
+. Navigate to this directory:
 +
 [source, shell]
 ----
-$ git clone https://github.com/TimefoldAI/timefold-quickstarts.git
-...
-$ cd timefold-quickstarts/java/flight-crew-scheduling
+$ cd rolling-stock-scheduling
 ----
 
 . Start the application with Maven:
@@ -139,7 +135,7 @@ The container image name
 +
 [source, shell]
 ----
-$ docker run -p 8080:8080 --rm $USER/flight-crew-scheduling:1.0-SNAPSHOT
+$ docker run -p 8080:8080 --rm $USER/rolling-stock-scheduling:1.0-SNAPSHOT
 ----
 
 [[native]]
