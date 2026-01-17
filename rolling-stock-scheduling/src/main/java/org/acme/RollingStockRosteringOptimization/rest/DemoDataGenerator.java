@@ -19,7 +19,7 @@ import org.acme.RollingStockRosteringOptimization.domain.Ride;
 import org.acme.RollingStockRosteringOptimization.domain.RollingStockSchedule;
 import org.acme.RollingStockRosteringOptimization.domain.Route;
 import org.acme.RollingStockRosteringOptimization.domain.Station;
-import org.acme.RollingStockRosteringOptimization.domain.TimeTable;
+// import org.acme.RollingStockRosteringOptimization.domain.TimeTable;
 import org.acme.RollingStockRosteringOptimization.domain.Train;
 
 @ApplicationScoped
@@ -27,7 +27,7 @@ public class DemoDataGenerator {
 
     private static final double DISTANCE_BETWEEN_STATIONS_KM = 5.0;
     // private static final int[] TRAIN_CAPACITIES = {500, 500, 500, 500, 500};
-    private static final int[] TRAIN_CAPACITIES = {550};
+    private static final int[] TRAIN_CAPACITIES = {475};
     private static final int RIDES_PER_ROUTE_MIN = 8;
     private static final int RIDES_PER_ROUTE_MAX = 12;
     private static final int TRAIN_COUNT = 100;
@@ -112,21 +112,21 @@ public class DemoDataGenerator {
 
         // Create rides for each route
         List<Ride> allRides = new ArrayList<>();
-        List<TimeTable> timeTables = new ArrayList<>();
+        // List<TimeTable> timeTables = new ArrayList<>();
         AtomicInteger rideCounter = new AtomicInteger(1);
-        AtomicInteger timeTableCounter = new AtomicInteger(1);
+        // AtomicInteger timeTableCounter = new AtomicInteger(1);
 
         for (Route route : routes) {
             int ridesForRoute = RIDES_PER_ROUTE_MIN + random.nextInt(RIDES_PER_ROUTE_MAX - RIDES_PER_ROUTE_MIN + 1);
             List<Ride> routeRides = createRidesForRoute(route, ridesForRoute, rideCounter, configuration, random);
             allRides.addAll(routeRides);
 
-            TimeTable timeTable = new TimeTable(
-                    String.valueOf(timeTableCounter.getAndIncrement()),
-                    route,
-                    routeRides
-            );
-            timeTables.add(timeTable);
+            // TimeTable timeTable = new TimeTable(
+            //         String.valueOf(timeTableCounter.getAndIncrement()),
+            //         route,
+            //         routeRides
+            // );
+            // timeTables.add(timeTable);
         }
 
         // Create demand for major stations
@@ -139,7 +139,7 @@ public class DemoDataGenerator {
         schedule.setTrains(trains);
         schedule.setRides(allRides);
         schedule.setDemands(demands);
-        schedule.setTimeTables(timeTables);
+        // schedule.setTimeTables(timeTables);
         schedule.setConfiguration(configuration);
 
         return schedule;

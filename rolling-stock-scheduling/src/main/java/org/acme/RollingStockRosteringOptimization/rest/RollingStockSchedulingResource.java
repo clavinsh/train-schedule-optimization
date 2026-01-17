@@ -92,6 +92,8 @@ public class RollingStockSchedulingResource {
                 solution -> {
                     // Called on each new best solution
                     solution.setSolverStatus(solverManager.getSolverStatus(jobId));
+                    // Calculate passenger counts based on assigned rides and demand
+                    solution.calculatePassengerCounts();
                     solutionMap.put(jobId, solution);
                 });
 
@@ -114,6 +116,9 @@ public class RollingStockSchedulingResource {
         // Update solver status
         SolverStatus status = solverManager.getSolverStatus(jobId);
         solution.setSolverStatus(status);
+
+        // Calculate passenger counts based on assigned rides and demand
+        solution.calculatePassengerCounts();
 
         return Response.ok(solution).build();
     }

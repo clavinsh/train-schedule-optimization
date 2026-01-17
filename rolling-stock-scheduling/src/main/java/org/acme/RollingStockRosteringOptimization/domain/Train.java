@@ -23,14 +23,8 @@ public class Train {
     // The depot assigned to this train
     private Depo depo;
 
-    // Current station where the train is located
-    private Station currentStation;
-
     // Current number of passengers on the train
     private int currentPassengerCount;
-
-    // Total distance traveled by this train in kilometers
-    private double traveledDistanceKm;
 
     public Train() {
     }
@@ -51,20 +45,6 @@ public class Train {
     }
 
     /**
-     * Check if this train can accommodate the given number of additional passengers.
-     */
-    public boolean canAccommodate(int additionalPassengers) {
-        return currentPassengerCount + additionalPassengers <= capacity;
-    }
-
-    /**
-     * Check if the train has exceeded its capacity.
-     */
-    public boolean isOverCapacity() {
-        return currentPassengerCount > capacity;
-    }
-
-    /**
      * Get the remaining capacity of this train.
      */
     public int getRemainingCapacity() {
@@ -72,13 +52,25 @@ public class Train {
     }
 
     /**
-     * Board passengers onto the train (up to remaining capacity).
-     * Returns the number of passengers actually boarded.
+     * Board passengers onto the train (for simulation purposes).
+     * @param count the number of passengers to board
+     * @return the number of passengers that actually boarded (limited by remaining capacity)
      */
-    public int boardPassengers(int passengerCount) {
-        int canBoard = Math.min(passengerCount, getRemainingCapacity());
+    public int boardPassengers(int count) {
+        int canBoard = Math.min(count, getRemainingCapacity());
         currentPassengerCount += canBoard;
         return canBoard;
+    }
+
+    /**
+     * Alight passengers from the train (for simulation purposes).
+     * @param count the number of passengers to alight
+     * @return the number of passengers that actually alighted
+     */
+    public int alightPassengers(int count) {
+        int toAlight = Math.min(count, currentPassengerCount);
+        currentPassengerCount -= toAlight;
+        return toAlight;
     }
 
     /**
@@ -86,13 +78,6 @@ public class Train {
      */
     public void alightAllPassengers() {
         currentPassengerCount = 0;
-    }
-
-    /**
-     * Add distance to the total traveled distance.
-     */
-    public void addTraveledDistance(double distanceKm) {
-        this.traveledDistanceKm += distanceKm;
     }
 
     @Override
@@ -128,28 +113,12 @@ public class Train {
         this.depo = depo;
     }
 
-    public Station getCurrentStation() {
-        return currentStation;
-    }
-
-    public void setCurrentStation(Station currentStation) {
-        this.currentStation = currentStation;
-    }
-
     public int getCurrentPassengerCount() {
         return currentPassengerCount;
     }
 
     public void setCurrentPassengerCount(int currentPassengerCount) {
         this.currentPassengerCount = currentPassengerCount;
-    }
-
-    public double getTraveledDistanceKm() {
-        return traveledDistanceKm;
-    }
-
-    public void setTraveledDistanceKm(double traveledDistanceKm) {
-        this.traveledDistanceKm = traveledDistanceKm;
     }
 
     @Override

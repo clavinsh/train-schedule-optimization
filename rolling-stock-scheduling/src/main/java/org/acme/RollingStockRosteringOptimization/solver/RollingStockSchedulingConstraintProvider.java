@@ -67,14 +67,17 @@ public class RollingStockSchedulingConstraintProvider implements ConstraintProvi
                         equal(Ride::getDepartureStation, Demand::getStation))
                 .filter((ride, demand) -> {
                     int hour = ride.getDepartureTime().getHour();
-                    int boardingDemand = demand.getDemandAtHour(hour);
-                    return boardingDemand > ride.getTrain().getCapacity();
+                    int waitingPassengers = demand.getDemandAtHour(hour);
+                    int boarded = ride.calculatePassengersBoarded(demand);
+                    // Penalize if not all waiting passengers could board
+                    return waitingPassengers > boarded;
                 })
                 .penalize(HardSoftLongScore.ofHard(2),
                         (ride, demand) -> {
                             int hour = ride.getDepartureTime().getHour();
-                            int boardingDemand = demand.getDemandAtHour(hour);
-                            return boardingDemand - ride.getTrain().getCapacity();
+                            int waitingPassengers = demand.getDemandAtHour(hour);
+                            int boarded = ride.calculatePassengersBoarded(demand);
+                            return waitingPassengers - boarded;
                         })
                 .asConstraint("Capacity exceeded");
     }
@@ -154,6 +157,7 @@ public class RollingStockSchedulingConstraintProvider implements ConstraintProvi
     /**
      * Maximize the number of passengers onloaded.
      * Reward based on the demand served at each station (up to train capacity).
+     * Uses Ride.calculatePassengersBoarded() for the calculation.
      */
     public Constraint maximizePassengersOnloaded(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(Ride.class)
@@ -161,12 +165,7 @@ public class RollingStockSchedulingConstraintProvider implements ConstraintProvi
                 .join(Demand.class,
                         equal(Ride::getDepartureStation, Demand::getStation))
                 .reward(HardSoftLongScore.ofSoft(1),
-                        (ride, demand) -> {
-                            int hour = ride.getDepartureTime().getHour();
-                            int boardingDemand = demand.getDemandAtHour(hour);
-                            // Reward for passengers served (limited by train capacity)
-                            return Math.min(boardingDemand, ride.getTrain().getCapacity());
-                        })
+                        (ride, demand) -> ride.calculatePassengersBoarded(demand))
                 .asConstraint("Maximize passengers onloaded");
     }
 

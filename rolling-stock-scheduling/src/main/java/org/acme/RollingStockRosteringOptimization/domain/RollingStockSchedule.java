@@ -1,6 +1,9 @@
 package org.acme.RollingStockRosteringOptimization.domain;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import ai.timefold.solver.core.api.domain.solution.PlanningEntityCollectionProperty;
 import ai.timefold.solver.core.api.domain.solution.PlanningScore;
@@ -44,8 +47,8 @@ public class RollingStockSchedule {
     @ProblemFactCollectionProperty
     private List<Demand> demands;
 
-    @ProblemFactCollectionProperty
-    private List<TimeTable> timeTables;
+    // @ProblemFactCollectionProperty
+    // private List<TimeTable> timeTables;
 
     @ProblemFactProperty
     private Configuration configuration;
@@ -113,13 +116,13 @@ public class RollingStockSchedule {
         this.demands = demands;
     }
 
-    public List<TimeTable> getTimeTables() {
-        return timeTables;
-    }
+    // public List<TimeTable> getTimeTables() {
+    //     return timeTables;
+    // }
 
-    public void setTimeTables(List<TimeTable> timeTables) {
-        this.timeTables = timeTables;
-    }
+    // public void setTimeTables(List<TimeTable> timeTables) {
+    //     this.timeTables = timeTables;
+    // }
 
     public Configuration getConfiguration() {
         return configuration;
@@ -151,5 +154,56 @@ public class RollingStockSchedule {
 
     public void setSolverStatus(SolverStatus solverStatus) {
         this.solverStatus = solverStatus;
+    }
+
+    /**
+     * Calculate and update the currentPassengerCount for all trains based on their assigned rides.
+     * This should be called after solving to populate passenger counts for display.
+     *
+     * For each train, we:
+     * 1. Find all rides assigned to this train
+     * 2. Sort them by departure time
+     * 3. For each ride, board passengers based on demand at the departure station (up to remaining capacity)
+     */
+    public void calculatePassengerCounts() {
+        if (trains == null || rides == null || demands == null) {
+            return;
+        }
+
+        // Create a map of station -> demand for quick lookup
+        Map<Station, Demand> demandByStation = demands.stream()
+                .collect(Collectors.toMap(Demand::getStation, d -> d, (a, b) -> a));
+
+        // Reset all train passenger counts
+        for (Train train : trains) {
+            train.setCurrentPassengerCount(0);
+        }
+
+        // Group rides by train
+        Map<Train, List<Ride>> ridesByTrain = rides.stream()
+                .filter(ride -> ride.getTrain() != null)
+                .collect(Collectors.groupingBy(Ride::getTrain));
+
+        // For each train, process rides in chronological order
+        for (Map.Entry<Train, List<Ride>> entry : ridesByTrain.entrySet()) {
+            Train train = entry.getKey();
+            List<Ride> trainRides = entry.getValue();
+
+            // Sort rides by departure time
+            trainRides.sort(Comparator.comparing(Ride::getDepartureTime));
+
+            // Process each ride and accumulate passengers
+            for (Ride ride : trainRides) {
+                Station departureStation = ride.getDepartureStation();
+                Demand demand = demandByStation.get(departureStation);
+
+                if (demand != null && ride.getDepartureTime() != null) {
+                    int hour = ride.getDepartureTime().getHour();
+                    int waitingPassengers = demand.getDemandAtHour(hour);
+                    // Board as many passengers as possible (up to remaining capacity)
+                    train.boardPassengers(waitingPassengers);
+                }
+            }
+        }
     }
 }

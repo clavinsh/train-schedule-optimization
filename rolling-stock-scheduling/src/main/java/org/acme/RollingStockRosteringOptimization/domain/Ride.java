@@ -120,6 +120,41 @@ public class Ride implements Comparable<Ride> {
         return segmentIndex >= 0 ? route.getId() + ":" + segmentIndex : null;
     }
 
+    /**
+     * Calculate the number of passengers that would board at this ride's departure station,
+     * based on demand at the departure hour and the train's capacity.
+     * This is a stateless calculation for use in constraints.
+     * @param demand the demand object for the departure station
+     * @return the number of passengers that would board (limited by train capacity), or 0 if no train assigned
+     */
+    @JsonIgnore
+    public int calculatePassengersBoarded(Demand demand) {
+        if (train == null || demand == null || departureTime == null) {
+            return 0;
+        }
+        int hour = departureTime.getHour();
+        int waitingPassengers = demand.getDemandAtHour(hour);
+        return Math.min(waitingPassengers, train.getCapacity());
+    }
+
+    /**
+     * Calculate passengers boarded considering the train's current passenger count.
+     * This accounts for remaining capacity after previous stops.
+     * @param demand the demand object for the departure station
+     * @param currentPassengersOnTrain passengers already on the train from previous stops
+     * @return the number of passengers that would board
+     */
+    @JsonIgnore
+    public int calculatePassengersBoardedWithCurrentLoad(Demand demand, int currentPassengersOnTrain) {
+        if (train == null || demand == null || departureTime == null) {
+            return 0;
+        }
+        int hour = departureTime.getHour();
+        int waitingPassengers = demand.getDemandAtHour(hour);
+        int remainingCapacity = Math.max(0, train.getCapacity() - currentPassengersOnTrain);
+        return Math.min(waitingPassengers, remainingCapacity);
+    }
+
     @Override
     public String toString() {
         return id + "(" + departureStation + "->" + arrivalStation + ")";
