@@ -7,6 +7,7 @@ let pollingInterval = null;
 let countdownInterval = null;
 let solveStartTime = null;
 let selectedRideId = null;
+let isSolving = false; // Flag to track solving state
 const POLL_INTERVAL_MS = 2000;
 const SOLVER_TIMEOUT_SECONDS = 30; // From rollingStockSolverConfig.xml
 
@@ -220,9 +221,11 @@ async function loadDemoData() {
 }
 
 async function startSolving() {
+    console.log('startSolving called, currentSchedule:', !!currentSchedule);
     if (!currentSchedule) return;
 
     try {
+        isSolving = true;
         btnSolve.disabled = true;
         btnSolve.classList.add('hidden');
         btnStop.classList.remove('hidden');
@@ -242,6 +245,7 @@ async function startSolving() {
 
         currentJobId = await response.text();
         solveStartTime = Date.now();
+        console.log('Solver started, job ID:', currentJobId, 'timeout:', SOLVER_TIMEOUT_SECONDS, 'seconds');
 
         // Start polling and countdown
         startPolling();
@@ -255,7 +259,11 @@ async function startSolving() {
 }
 
 async function stopSolving() {
-    if (!currentJobId) return;
+    if (!currentJobId || !isSolving) return;
+
+    // Set flag immediately to prevent multiple calls
+    isSolving = false;
+    console.log('Stopping solver for job:', currentJobId);
 
     try {
         btnStop.disabled = true;
@@ -275,6 +283,8 @@ async function stopSolving() {
 
     } catch (error) {
         console.error('Error stopping solver:', error);
+        // Reset flag on error so user can retry
+        isSolving = false;
     }
 }
 
@@ -293,6 +303,7 @@ function stopPolling() {
 }
 
 function startCountdown() {
+    console.log('startCountdown called');
     if (countdownInterval) clearInterval(countdownInterval);
     updateCountdown();
     countdownInterval = setInterval(updateCountdown, 1000);
@@ -311,13 +322,20 @@ function updateCountdown() {
     const elapsed = Math.floor((Date.now() - solveStartTime) / 1000);
     const remaining = Math.max(0, SOLVER_TIMEOUT_SECONDS - elapsed);
 
+    // Log every 5 seconds to avoid spam
+    if (remaining % 5 === 0 || remaining <= 3) {
+        console.log('Countdown:', remaining, 'seconds remaining, isSolving:', isSolving);
+    }
+
     const indicatorText = solvingIndicator.querySelector('span');
     if (indicatorText) {
         indicatorText.textContent = `Solving... ${remaining}s remaining`;
     }
 
-    if (remaining <= 0) {
+    if (remaining <= 0 && isSolving) {
+        console.log('Timer expired, stopping solver...');
         stopCountdown();
+        stopSolving();
     }
 }
 
@@ -349,6 +367,7 @@ async function pollStatus() {
 
         // Check if solving is complete
         if (solution.solverStatus === 'NOT_SOLVING') {
+            console.log('Solver finished (detected by poll)');
             stopPolling();
             stopCountdown();
             resetSolvingUI();
@@ -893,6 +912,7 @@ function createConstraintItem(constraint) {
 }
 
 function resetSolvingUI() {
+    isSolving = false;
     btnSolve.disabled = false;
     btnSolve.classList.remove('hidden');
     btnStop.classList.add('hidden');

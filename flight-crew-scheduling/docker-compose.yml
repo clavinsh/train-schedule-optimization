@@ -6,6 +6,8 @@ services:
     environment:
       - QUARKUS_LOG_LEVEL=INFO
       - QUARKUS_HTTP_HOST=0.0.0.0
+      # Timefold solver logging (DEBUG or TRACE for detailed output)
+      - QUARKUS_LOG_CATEGORY__AI_TIMEFOLD_SOLVER__LEVEL=DEBUG
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/q/health"]
       interval: 10s

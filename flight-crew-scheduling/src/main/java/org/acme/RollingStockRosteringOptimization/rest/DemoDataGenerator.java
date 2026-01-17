@@ -30,7 +30,7 @@ public class DemoDataGenerator {
     private static final int[] TRAIN_CAPACITIES = {550};
     private static final int RIDES_PER_ROUTE_MIN = 8;
     private static final int RIDES_PER_ROUTE_MAX = 12;
-    private static final int TRAIN_COUNT = 40;
+    private static final int TRAIN_COUNT = 35;
 
     // Depot locations (hard-coded as these are infrastructure decisions)
     private static final List<String> DEPOT_STATIONS = List.of("Rīga", "Krustpils", "Jelgava", "Daugavpils", "Rēzekne");
