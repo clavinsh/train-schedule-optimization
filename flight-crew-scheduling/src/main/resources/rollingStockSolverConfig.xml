@@ -6,7 +6,22 @@
     <scoreDirectorFactory>
         <constraintProviderClass>org.acme.RollingStockRosteringOptimization.solver.RollingStockSchedulingConstraintProvider</constraintProviderClass>
     </scoreDirectorFactory>
+
+    <!-- Configure the optimization algorithms (optional) -->
     <termination>
-        <spentLimit>PT30S</spentLimit>
+        <secondsSpentLimit>60</secondsSpentLimit>
     </termination>
+
+    <constructionHeuristic>
+    </constructionHeuristic>
+
+    <localSearch>
+        <swapMoveSelector/>
+        <acceptor>
+            <simulatedAnnealingStartingTemperature>100hard/500soft</simulatedAnnealingStartingTemperature>
+        </acceptor>
+        <forager>
+            <acceptedCountLimit>1</acceptedCountLimit>
+        </forager>
+    </localSearch>
 </solver>

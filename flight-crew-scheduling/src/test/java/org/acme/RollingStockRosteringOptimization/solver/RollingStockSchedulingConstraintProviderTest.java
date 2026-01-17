@@ -32,15 +32,8 @@ class RollingStockSchedulingConstraintProviderTest {
                 RollingStockSchedule.class,
                 Ride.class);
 
-        // Create solver factory with explicit configuration
-        SolverConfig solverConfig = new SolverConfig()
-                .withSolutionClass(RollingStockSchedule.class)
-                .withEntityClasses(Ride.class)
-                .withConstraintProviderClass(RollingStockSchedulingConstraintProvider.class)
-                .withTerminationConfig(new TerminationConfig()
-                        .withSpentLimit(Duration.ofSeconds(10)));
-
-        solverFactory = SolverFactory.create(solverConfig);
+        // Create solver factory from XML configuration
+        solverFactory = SolverFactory.createFromXmlResource("rollingStockSolverConfig.xml");
         solutionManager = SolutionManager.create(solverFactory);
         demoDataGenerator = new DemoDataGenerator();
     }
@@ -208,7 +201,7 @@ class RollingStockSchedulingConstraintProviderTest {
         });
 
         // Solve (with short timeout for testing)
-        System.out.println("\n--- SOLVING (this will take up to 30 seconds) ---");
+        System.out.println("\n--- SOLVING ---");
         var solver = solverFactory.buildSolver();
         RollingStockSchedule solution = solver.solve(problem);
 

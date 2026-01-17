@@ -32,7 +32,7 @@ public class DemoDataGenerator {
     private static final int TRAIN_COUNT = 40;
 
     // Depot locations (hard-coded as these are infrastructure decisions)
-    private static final List<String> DEPOT_STATIONS = List.of("Rīga", "Krustpils", "Jelgava");
+    private static final List<String> DEPOT_STATIONS = List.of("Rīga", "Krustpils", "Jelgava", "Daugavpils", "Rēzekne");
 
     // Major hubs with higher passenger demand
     private static final Set<String> MAJOR_HUBS = Set.of(

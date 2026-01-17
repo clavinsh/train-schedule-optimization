@@ -70,7 +70,7 @@ public class RollingStockSchedulingConstraintProvider implements ConstraintProvi
                     int boardingDemand = demand.getDemandAtHour(hour);
                     return boardingDemand > ride.getTrain().getCapacity();
                 })
-                .penalize(HardSoftLongScore.ofHard(100),
+                .penalize(HardSoftLongScore.ofHard(1),
                         (ride, demand) -> {
                             int hour = ride.getDepartureTime().getHour();
                             int boardingDemand = demand.getDemandAtHour(hour);
