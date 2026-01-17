@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<solver xmlns="https://timefold.ai/xsd/solver" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="https://timefold.ai/xsd/solver https://timefold.ai/xsd/solver/solver.xsd">
+    <solutionClass>com.example.domain.RollingStockSchedule</solutionClass>
+    <entityClass>com.example.domain.DepartureTime</entityClass>
+    <scoreDirectorFactory>
+        <constraintProviderClass>com.example.solver.TrainScheduleConstraintProvider</constraintProviderClass>
+    </scoreDirectorFactory>
+
+    <!-- Termination: stop after 5 minutes OR 30 seconds without improvement -->
+    <termination>
+        <secondsSpentLimit>300</secondsSpentLimit>
+        <unimprovedSecondsSpentLimit>30</unimprovedSecondsSpentLimit>
+    </termination>
+
+    <!-- Construction Heuristic: build initial solution quickly -->
+    <constructionHeuristic>
+        <constructionHeuristicType>FIRST_FIT_DECREASING</constructionHeuristicType>
+    </constructionHeuristic>
+
+    <!-- Local Search: use Late Acceptance with change and swap moves -->
+    <localSearch>
+        <unionMoveSelector>
+            <changeMoveSelector/>
+            <swapMoveSelector/>
+        </unionMoveSelector>
+
+        <!-- Late Acceptance: good balance of exploration vs exploitation -->
+        <acceptor>
+            <lateAcceptanceSize>400</lateAcceptanceSize>
+        </acceptor>
+
+        <!-- Forager: pick first accepted move after evaluating a few -->
+        <forager>
+            <acceptedCountLimit>4</acceptedCountLimit>
+        </forager>
+    </localSearch>
+</solver>

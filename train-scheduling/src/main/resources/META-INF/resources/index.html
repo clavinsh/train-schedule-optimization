@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type">
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <title>Train Schedule Optimization - Timefold Solver</title>
+    <link rel="stylesheet" href="/webjars/bootstrap/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="/webjars/font-awesome/css/all.css" />
+    <link rel="icon" href="https://timefold.ai/uploads/images/Brand-Assets/timefold-solver-logomark.png"
+        type="image/png">
+    <style>
+        :root {
+            --ts-violet-1-rgb: #3E00FF;
+            --ts-violet-2-rgb: #3423A6;
+            --bs-link-color: var(--ts-violet-1-rgb);
+            --bs-link-hover-color: var(--ts-violet-2-rgb);
+        }
+
+        .nav-pills {
+            --bs-nav-pills-link-active-bg: var(--ts-violet-1-rgb);
+        }
+
+        .train-card {
+            border-left: 4px solid var(--ts-violet-1-rgb);
+        }
+
+        .route-badge {
+            font-size: 0.75rem;
+        }
+
+        .station-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .departure-item {
+            padding: 0.5rem;
+            margin: 0.25rem 0;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+        }
+
+        .departure-item.assigned {
+            background-color: #d4edda;
+            border-left: 3px solid #28a745;
+        }
+
+        .departure-item.unassigned {
+            background-color: #f8d7da;
+            border-left: 3px solid #dc3545;
+        }
+
+        .timeline-container {
+            height: 500px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+        }
+
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .vis-item {
+            border-radius: 4px;
+        }
+
+        .vis-item.vis-selected {
+            border-color: var(--ts-violet-1-rgb);
+        }
+    </style>
+</head>
+
+<body>
+    <header class="bg-white shadow">
+        <div class="container-fluid">
+            <nav class="navbar navbar-expand-lg mb-3">
+                <a class="navbar-brand" style="width: 200px;overflow: hidden;">
+                    <img src="https://timefold.ai/uploads/images/Brand-Assets/timefold-solver-logo.png"
+                        alt="Timefold Solver logo" width="200px" style="margin-top:-20px;margin-bottom:-20px">
+                </a>
+                <a class="navbar-brand d-none d-lg-block">
+                    <i class="fas fa-train me-2"></i>Train Schedule Optimization
+                </a>
+                <div class="ms-auto">
+                    <div class="d-flex align-items-center" id="navbarNav">
+                        <ul class="nav nav-pills">
+                            <li class="nav-item active" id="navUIItem">
+                                <button class="nav-link active" id="navUI" data-bs-toggle="pill" data-bs-target="#demo"
+                                    type="button">Demo UI</button>
+                            </li>
+                            <li class="nav-item" id="navRestItem">
+                                <button class="nav-link" id="navRest" data-bs-toggle="pill" data-bs-target="#rest"
+                                    type="button">Guide</button>
+                            </li>
+                            <li class="nav-item" id="navOpenApiItem">
+                                <button class="nav-link" id="navOpenApi" data-bs-toggle="pill" data-bs-target="#openapi"
+                                    type="button">REST API</button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <div class="tab-content">
+        <div id="demo" class="tab-pane fade show active container-fluid">
+            <div class="sticky-top d-flex justify-content-center align-items-center" aria-live="polite"
+                aria-atomic="true">
+                <div id="notificationPanel" style="position: absolute; top: .5rem; z-index: 1050;"></div>
+            </div>
+
+            <!-- Stats Row -->
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <div class="card stats-card">
+                        <div class="card-body text-center">
+                            <h5 class="card-title"><i class="fas fa-train"></i> Trains</h5>
+                            <h2 id="trainCount">-</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stats-card">
+                        <div class="card-body text-center">
+                            <h5 class="card-title"><i class="fas fa-route"></i> Routes</h5>
+                            <h2 id="routeCount">-</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stats-card">
+                        <div class="card-body text-center">
+                            <h5 class="card-title"><i class="fas fa-clock"></i> Departures</h5>
+                            <h2 id="departureCount">-</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stats-card">
+                        <div class="card-body text-center">
+                            <h5 class="card-title"><i class="fas fa-map-marker-alt"></i> Stations</h5>
+                            <h2 id="stationCount">-</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Control Bar -->
+            <div class="mb-3 d-flex align-items-center">
+                <button id="solveButton" type="button" class="btn btn-success me-2">
+                    <span class="fas fa-play"></span> Solve
+                </button>
+                <button id="stopSolvingButton" type="button" class="btn btn-danger me-2" style="display: none;">
+                    <span class="fas fa-stop"></span> Stop Solving
+                </button>
+                <span id="score" class="badge bg-secondary fs-6 me-2">Score: ?</span>
+                <button id="analyzeButton" type="button" class="btn btn-outline-secondary me-2">
+                    <span class="fas fa-chart-bar"></span> Analyze
+                </button>
+                <button id="exportButton" type="button" class="btn btn-outline-primary me-2">
+                    <span class="fas fa-download"></span> Export JSON
+                </button>
+                <button id="importButton" type="button" class="btn btn-outline-primary me-2">
+                    <span class="fas fa-upload"></span> Import JSON
+                </button>
+                <input type="file" id="importFileInput" accept=".json" style="display: none;">
+
+                <div class="ms-auto">
+                    <ul class="nav nav-pills" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="byTrainTab" data-bs-toggle="tab"
+                                data-bs-target="#byTrainPanel" type="button" role="tab">
+                                <i class="fas fa-train"></i> By Train
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="byRouteTab" data-bs-toggle="tab"
+                                data-bs-target="#byRoutePanel" type="button" role="tab">
+                                <i class="fas fa-route"></i> By Route
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Main Content Tabs -->
+            <div class="tab-content mb-4">
+                <div class="tab-pane fade show active" id="byTrainPanel" role="tabpanel">
+                    <div class="timeline-container" id="trainTimeline"></div>
+                </div>
+                <div class="tab-pane fade" id="byRoutePanel" role="tabpanel">
+                    <div class="timeline-container" id="routeTimeline"></div>
+                </div>
+            </div>
+
+            <!-- Unassigned Departures -->
+            <div class="row">
+                <div class="col-12">
+                    <h4><i class="fas fa-exclamation-triangle text-warning"></i> Unassigned Departures</h4>
+                    <div id="unassignedDepartures" class="row row-cols-1 row-cols-md-4 g-3"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- REST Guide Tab -->
+        <div id="rest" class="tab-pane fade container-fluid">
+            <h1>REST API Guide</h1>
+
+            <h2>Train Schedule Optimization via cURL</h2>
+
+            <h3>1. Download demo data</h3>
+            <pre>
+                <button class="btn btn-outline-dark btn-sm float-end" onclick="copyTextToClipboard('curl1')">Copy</button>
+                <code id="curl1">curl -X GET -H 'Accept:application/json' http://localhost:8080/demo-data -o sample.json</code>
+            </pre>
+
+            <h3>2. Post the sample data for solving</h3>
+            <p>The POST operation returns a <code>jobId</code> that should be used in subsequent commands.</p>
+            <pre>
+                <button class="btn btn-outline-dark btn-sm float-end" onclick="copyTextToClipboard('curl2')">Copy</button>
+                <code id="curl2">curl -X POST -H 'Content-Type:application/json' http://localhost:8080/schedules -d@sample.json</code>
+            </pre>
+
+            <h3>3. Get the current status</h3>
+            <pre>
+                <button class="btn btn-outline-dark btn-sm float-end" onclick="copyTextToClipboard('curl3')">Copy</button>
+                <code id="curl3">curl -X GET -H 'Accept:text/plain' http://localhost:8080/schedules/{jobId}/status</code>
+            </pre>
+
+            <h3>4. Get the complete solution</h3>
+            <pre>
+                <button class="btn btn-outline-dark btn-sm float-end" onclick="copyTextToClipboard('curl4')">Copy</button>
+                <code id="curl4">curl -X GET -H 'Accept:application/json' http://localhost:8080/schedules/{jobId} -o solution.json</code>
+            </pre>
+
+            <h3>5. Get the score analysis</h3>
+            <pre>
+                <button class="btn btn-outline-dark btn-sm float-end" onclick="copyTextToClipboard('curl5')">Copy</button>
+                <code id="curl5">curl -X GET -H 'Accept:application/json' http://localhost:8080/schedules/{jobId}/score-analysis</code>
+            </pre>
+
+            <h3>6. Terminate solving early</h3>
+            <pre>
+                <button class="btn btn-outline-dark btn-sm float-end" onclick="copyTextToClipboard('curl6')">Copy</button>
+                <code id="curl6">curl -X DELETE http://localhost:8080/schedules/{jobId}</code>
+            </pre>
+        </div>
+
+        <!-- OpenAPI Tab -->
+        <div id="openapi" class="tab-pane fade container-fluid">
+            <div class="ratio ratio-1x1">
+                <iframe src="/q/swagger-ui" style="overflow:hidden;" scrolling="no"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-white mt-4">
+        <div class="container">
+            <div class="hstack gap-3 p-4">
+                <div class="ms-auto">
+                    <a class="text-white" href="https://timefold.ai">Timefold Website</a>
+                </div>
+                <div class="vr"></div>
+                <div>
+                    <a class="text-white" href="https://docs.timefold.ai">Documentation</a>
+                </div>
+                <div class="vr"></div>
+                <div class="me-auto">
+                    <a class="text-white" href="https://github.com/TimefoldAI/timefold-solver">GitHub</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Score Analysis Modal -->
+    <div class="modal fade" id="scoreAnalysisModal" tabindex="-1" aria-labelledby="scoreAnalysisModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="scoreAnalysisModalLabel">
+                        Score Analysis <span id="scoreAnalysisScoreLabel" class="badge bg-secondary"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="scoreAnalysisModalContent">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/webjars/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="/webjars/jquery/jquery.min.js"></script>
+    <script src="/webjars/js-joda/dist/js-joda.min.js"></script>
+    <script src="/webjars/js-joda__locale_en-us/dist/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vis-timeline@7.7.2/standalone/umd/vis-timeline-graph2d.min.js"
+        integrity="sha256-Jy2+UO7rZ2Dgik50z3XrrNpnc5+2PAx9MhL2CicodME=" crossorigin="anonymous"></script>
+    <script src="/app.js"></script>
+</body>
+
+</html>
