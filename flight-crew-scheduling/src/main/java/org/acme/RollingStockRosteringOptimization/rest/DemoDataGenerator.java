@@ -26,10 +26,10 @@ import org.acme.RollingStockRosteringOptimization.domain.Train;
 public class DemoDataGenerator {
 
     private static final double DISTANCE_BETWEEN_STATIONS_KM = 10.0;
-    private static final int[] TRAIN_CAPACITIES = {100, 150, 200, 250, 300};
+    private static final int[] TRAIN_CAPACITIES = {500, 500, 500, 500, 500};
     private static final int RIDES_PER_ROUTE_MIN = 8;
     private static final int RIDES_PER_ROUTE_MAX = 12;
-    private static final int TRAIN_COUNT = 20;
+    private static final int TRAIN_COUNT = 40;
 
     // Depot locations (hard-coded as these are infrastructure decisions)
     private static final List<String> DEPOT_STATIONS = List.of("Rīga", "Krustpils", "Jelgava");
@@ -138,6 +138,79 @@ public class DemoDataGenerator {
         schedule.setConfiguration(configuration);
 
         return schedule;
+    }
+
+    /**
+     * Print a summary of the generated schedule data for debugging.
+     */
+    public void printScheduleSummary(RollingStockSchedule schedule) {
+        System.out.println("\n" + "=".repeat(80));
+        System.out.println("ROLLING STOCK SCHEDULE - DEMO DATA SUMMARY");
+        System.out.println("=".repeat(80));
+
+        // Stations
+        System.out.println("\n--- STATIONS (" + schedule.getStations().size() + " total) ---");
+        System.out.println("First 10 stations:");
+        schedule.getStations().stream().limit(10)
+                .forEach(s -> System.out.println("  - " + s.getName()));
+        if (schedule.getStations().size() > 10) {
+            System.out.println("  ... and " + (schedule.getStations().size() - 10) + " more");
+        }
+
+        // Depots
+        System.out.println("\n--- DEPOTS (" + schedule.getDepos().size() + " total) ---");
+        schedule.getDepos().forEach(d ->
+            System.out.println("  - " + d.getId() + " at " + d.getStation().getName()));
+
+        // Routes
+        System.out.println("\n--- ROUTES (" + schedule.getRoutes().size() + " total) ---");
+        for (Route route : schedule.getRoutes()) {
+            System.out.println("  - " + route.getName() + " (" + route.getStations().size() + " stations, "
+                    + route.getSegmentCount() + " segments)");
+        }
+
+        // Trains
+        System.out.println("\n--- TRAINS (" + schedule.getTrains().size() + " total) ---");
+        System.out.println("Capacity distribution:");
+        schedule.getTrains().stream()
+                .collect(java.util.stream.Collectors.groupingBy(Train::getCapacity, java.util.stream.Collectors.counting()))
+                .forEach((capacity, count) -> System.out.println("  - Capacity " + capacity + ": " + count + " trains"));
+
+        // Rides
+        System.out.println("\n--- RIDES (" + schedule.getRides().size() + " total) ---");
+        System.out.println("Rides per route:");
+        schedule.getRides().stream()
+                .collect(java.util.stream.Collectors.groupingBy(r -> r.getRoute().getName(), java.util.stream.Collectors.counting()))
+                .forEach((routeName, count) -> System.out.println("  - " + routeName + ": " + count + " rides"));
+
+        // Sample rides
+        System.out.println("\nSample rides (first 5):");
+        schedule.getRides().stream().limit(5).forEach(r ->
+            System.out.println("  - " + r.getId() + ": " + r.getDepartureStation().getName()
+                    + " -> " + r.getArrivalStation().getName()
+                    + " @ " + r.getDepartureTime().toLocalTime() + "-" + r.getArrivalTime().toLocalTime()));
+
+        // Demands
+        System.out.println("\n--- DEMANDS (" + schedule.getDemands().size() + " stations with demand) ---");
+        System.out.println("Sample demand (major hubs at rush hour 8:00):");
+        schedule.getDemands().stream()
+                .filter(d -> MAJOR_HUBS.contains(d.getStation().getName()))
+                .limit(5)
+                .forEach(d -> System.out.println("  - " + d.getStation().getName() + ": " + d.getDemandAtHour(8) + " passengers"));
+
+        // Total demand calculation
+        int totalDemandAt8 = schedule.getDemands().stream()
+                .mapToInt(d -> d.getDemandAtHour(8))
+                .sum();
+        int totalCapacity = schedule.getTrains().stream()
+                .mapToInt(Train::getCapacity)
+                .sum();
+        System.out.println("\n--- CAPACITY vs DEMAND (at 8:00 AM) ---");
+        System.out.println("  Total train capacity: " + totalCapacity + " passengers");
+        System.out.println("  Total demand at 8AM: " + totalDemandAt8 + " passengers");
+        System.out.println("  Ratio: " + String.format("%.2f", (double) totalCapacity / totalDemandAt8));
+
+        System.out.println("\n" + "=".repeat(80) + "\n");
     }
 
     private Map<String, Station> createStations() {

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<solver xmlns="https://timefold.ai/xsd/solver" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="https://timefold.ai/xsd/solver https://timefold.ai/xsd/solver/solver.xsd">
+    <solutionClass>org.acme.RollingStockRosteringOptimization.domain.RollingStockSchedule</solutionClass>
+    <entityClass>org.acme.RollingStockRosteringOptimization.domain.Ride</entityClass>
+    <scoreDirectorFactory>
+        <constraintProviderClass>org.acme.RollingStockRosteringOptimization.solver.RollingStockSchedulingConstraintProvider</constraintProviderClass>
+    </scoreDirectorFactory>
+    <termination>
+        <spentLimit>PT30S</spentLimit>
+    </termination>
+</solver>
