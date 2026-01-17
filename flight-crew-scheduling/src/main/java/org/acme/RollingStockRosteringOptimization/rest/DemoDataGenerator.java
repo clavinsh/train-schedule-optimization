@@ -3,9 +3,11 @@ package org.acme.RollingStockRosteringOptimization.rest;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -28,6 +30,57 @@ public class DemoDataGenerator {
     private static final int RIDES_PER_ROUTE_MIN = 8;
     private static final int RIDES_PER_ROUTE_MAX = 12;
     private static final int TRAIN_COUNT = 20;
+
+    // Depot locations (hard-coded as these are infrastructure decisions)
+    private static final List<String> DEPOT_STATIONS = List.of("Rīga", "Krustpils", "Jelgava");
+
+    // Major hubs with higher passenger demand
+    private static final Set<String> MAJOR_HUBS = Set.of(
+            "Rīga", "Krustpils", "Jelgava", "Daugavpils", "Rēzekne",
+            "Liepāja", "Sigulda", "Cēsis", "Valmiera", "Ogre", "Majori", "Gulbene"
+    );
+
+    // Route definitions - the single source of truth for all station names and route structures
+    private static final List<RouteDefinition> ROUTE_DEFINITIONS = List.of(
+            new RouteDefinition("Rīga - Indra", List.of(
+                    "Rīga", "Vagonu parks", "Jāņavārti", "Daugmale", "Šķirotava", "Gaisma",
+                    "Rumbula", "Dārziņi", "Dole", "Salaspils", "Saulkalne", "Ikšķile", "Jaunogre",
+                    "Ogre", "Pārogre", "Ciemupe", "Ķegums", "Lielvārde", "Kaibala", "Jumprava",
+                    "Skrīveri", "Muldakmens", "Aizkraukle", "Koknese", "Alotene", "Pļaviņas", "Krustpils",
+                    "Trepe", "Līvāni", "Jersika", "Nīcgale", "Vabole", "Līksna", "Daugavpils", "Krāslava", "Indra")),
+            new RouteDefinition("Rīga - Zilupe", List.of(
+                    "Rīga", "Vagonu parks", "Jāņavārti", "Daugmale", "Šķirotava", "Gaisma",
+                    "Rumbula", "Dārziņi", "Dole", "Salaspils", "Saulkalne", "Ikšķile", "Jaunogre",
+                    "Ogre", "Pārogre", "Ciemupe", "Ķegums", "Lielvārde", "Kaibala", "Jumprava",
+                    "Skrīveri", "Muldakmens", "Aizkraukle", "Koknese", "Alotene", "Pļaviņas", "Krustpils",
+                    "Kūkas", "Mežāre", "Atašiene", "Stirniene", "Varakļāni", "Viļāni", "Sakstagals",
+                    "Rēzekne", "Taudejāni", "Cirma", "Ludza", "Istalsna", "Nerza", "Briģi", "Zilupe")),
+            new RouteDefinition("Rīga - Gulbene", List.of(
+                    "Rīga", "Vagonu parks", "Jāņavārti", "Daugmale", "Šķirotava", "Gaisma",
+                    "Rumbula", "Dārziņi", "Dole", "Salaspils", "Saulkalne", "Ikšķile", "Jaunogre",
+                    "Ogre", "Pārogre", "Ciemupe", "Ķegums", "Lielvārde", "Kaibala", "Jumprava",
+                    "Skrīveri", "Muldakmens", "Aizkraukle", "Koknese", "Alotene", "Pļaviņas", "Krustpils",
+                    "Jaunkalsnava", "Kalsnava", "Mārciena", "Madona", "Cesvaine", "Jaungulbene", "Gulbene")),
+            new RouteDefinition("Rīga - Liepāja", List.of(
+                    "Rīga", "Torņakalns", "Bieriņi / Bērnu slimnīca", "BA Turība", "Tīraine",
+                    "Medemciems", "Jaunolaine", "Olaine", "Dalbe", "Cena", "Ozolnieki", "Cukurfabrika",
+                    "Jelgava", "Dobele", "Biksti", "Saldus", "Skrunda", "Liepāja")),
+            new RouteDefinition("Rīga - Tukums II", List.of(
+                    "Rīga", "Torņakalns", "Zasulauks", "Depo", "Zolitūde", "Imanta", "Babīte",
+                    "Priedaine", "Lielupe", "Bulduri", "Dzintari", "Majori", "Dubulti", "Jaundubulti",
+                    "Pumpuri", "Melluži", "Asari", "Vaivari", "Sloka", "Kūdra", "Ķemeri", "Smārde",
+                    "Milzkalne", "Tukums I", "Tukums II")),
+            new RouteDefinition("Rīga - Valga", List.of(
+                    "Rīga", "Zemitāni", "Čiekurkalns", "Šmerlis", "Jugla", "Garkalne", "Krievupe",
+                    "Vangaži", "Inčukalns", "Egļupe", "Sigulda", "Līgatne", "Ieriķi", "Melturi",
+                    "Āraiši", "Cēsis", "Jānamuiža", "Lode", "Valmiera", "Strenči", "Lugaži", "Valga")),
+            new RouteDefinition("Rīga - Skulte", List.of(
+                    "Rīga", "Zemitāni", "Brasa", "Sarkandaugava", "Dauderi", "Mangaļi", "Ziemeļblāzma",
+                    "Vecdaugava", "Vecāķi", "Kalngale", "Garciems", "Garupe", "Carnikava", "Gauja",
+                    "Lilaste", "Inčupe", "Pabaži", "Saulkrasti", "Ķīšupe", "Zvejniekciems", "Skulte"))
+    );
+
+    private record RouteDefinition(String name, List<String> stationNames) {}
 
     public RollingStockSchedule generateDemoData() {
         Random random = new Random(42);
@@ -88,78 +141,16 @@ public class DemoDataGenerator {
     }
 
     private Map<String, Station> createStations() {
+        // Collect unique station names from all route definitions (preserving order)
+        Set<String> stationNames = new LinkedHashSet<>();
+        for (RouteDefinition routeDef : ROUTE_DEFINITIONS) {
+            stationNames.addAll(routeDef.stationNames());
+        }
+
+        // Create Station objects
         Map<String, Station> stations = new HashMap<>();
         AtomicInteger idCounter = new AtomicInteger(1);
-
-        // Central hub
-        stations.put("Rīga", new Station(String.valueOf(idCounter.getAndIncrement()), "Rīga"));
-
-        // Route: Rīga - Indra | Zilupe | Gulbene (shared segment)
-        String[] sharedEastern = {"Vagonu parks", "Jāņavārti", "Daugmale", "Šķirotava", "Gaisma",
-                "Rumbula", "Dārziņi", "Dole", "Salaspils", "Saulkalne", "Ikšķile", "Jaunogre",
-                "Ogre", "Pārogre", "Ciemupe", "Ķegums", "Lielvārde", "Kaibala", "Jumprava",
-                "Skrīveri", "Muldakmens", "Aizkraukle", "Koknese", "Alotene", "Pļaviņas", "Krustpils"};
-        for (String name : sharedEastern) {
-            stations.put(name, new Station(String.valueOf(idCounter.getAndIncrement()), name));
-        }
-
-        // Route: Rīga - Indra (from Krustpils)
-        String[] indraRoute = {"Trepe", "Līvāni", "Jersika", "Nīcgale", "Vabole", "Līksna",
-                "Daugavpils", "Krāslava", "Indra"};
-        for (String name : indraRoute) {
-            stations.put(name, new Station(String.valueOf(idCounter.getAndIncrement()), name));
-        }
-
-        // Route: Rīga - Zilupe (from Krustpils)
-        String[] zilupeRoute = {"Kūkas", "Mežāre", "Atašiene", "Stirniene", "Varakļāni", "Viļāni",
-                "Sakstagals", "Rēzekne", "Taudejāni", "Cirma", "Ludza", "Istalsna", "Nerza", "Briģi", "Zilupe"};
-        for (String name : zilupeRoute) {
-            stations.put(name, new Station(String.valueOf(idCounter.getAndIncrement()), name));
-        }
-
-        // Route: Rīga - Gulbene (from Krustpils)
-        String[] gulbeneRoute = {"Jaunkalsnava", "Kalsnava", "Mārciena", "Madona", "Cesvaine",
-                "Jaungulbene", "Gulbene"};
-        for (String name : gulbeneRoute) {
-            stations.put(name, new Station(String.valueOf(idCounter.getAndIncrement()), name));
-        }
-
-        // Route: Rīga - Liepāja | Tukums II (shared start)
-        stations.put("Torņakalns", new Station(String.valueOf(idCounter.getAndIncrement()), "Torņakalns"));
-
-        // Route: Rīga - Liepāja
-        String[] liepajaRoute = {"Bieriņi / Bērnu slimnīca", "BA Turība", "Tīraine", "Medemciems",
-                "Jaunolaine", "Olaine", "Dalbe", "Cena", "Ozolnieki", "Cukurfabrika", "Jelgava",
-                "Dobele", "Biksti", "Saldus", "Skrunda", "Liepāja"};
-        for (String name : liepajaRoute) {
-            stations.put(name, new Station(String.valueOf(idCounter.getAndIncrement()), name));
-        }
-
-        // Route: Rīga - Tukums II
-        String[] tukumsRoute = {"Zasulauks", "Depo", "Zolitūde", "Imanta", "Babīte", "Priedaine",
-                "Lielupe", "Bulduri", "Dzintari", "Majori", "Dubulti", "Jaundubulti", "Pumpuri",
-                "Melluži", "Asari", "Vaivari", "Sloka", "Kūdra", "Ķemeri", "Smārde", "Milzkalne",
-                "Tukums I", "Tukums II"};
-        for (String name : tukumsRoute) {
-            stations.put(name, new Station(String.valueOf(idCounter.getAndIncrement()), name));
-        }
-
-        // Route: Rīga - Valga | Skulte (shared start)
-        stations.put("Zemitāni", new Station(String.valueOf(idCounter.getAndIncrement()), "Zemitāni"));
-
-        // Route: Rīga - Valga
-        String[] valgaRoute = {"Čiekurkalns", "Šmerlis", "Jugla", "Garkalne", "Krievupe", "Vangaži",
-                "Inčukalns", "Egļupe", "Sigulda", "Līgatne", "Ieriķi", "Melturi", "Āraiši", "Cēsis",
-                "Jānamuiža", "Lode", "Valmiera", "Strenči", "Lugaži", "Valga"};
-        for (String name : valgaRoute) {
-            stations.put(name, new Station(String.valueOf(idCounter.getAndIncrement()), name));
-        }
-
-        // Route: Rīga - Skulte
-        String[] skulteRoute = {"Brasa", "Sarkandaugava", "Dauderi", "Mangaļi", "Ziemeļblāzma",
-                "Vecdaugava", "Vecāķi", "Kalngale", "Garciems", "Garupe", "Carnikava", "Gauja",
-                "Lilaste", "Inčupe", "Pabaži", "Saulkrasti", "Ķīšupe", "Zvejniekciems", "Skulte"};
-        for (String name : skulteRoute) {
+        for (String name : stationNames) {
             stations.put(name, new Station(String.valueOf(idCounter.getAndIncrement()), name));
         }
 
@@ -167,101 +158,28 @@ public class DemoDataGenerator {
     }
 
     private void setupNeighborDistances(Map<String, Station> stationMap) {
-        // Helper to add bidirectional connection
-        java.util.function.BiConsumer<String, String> connect = (from, to) -> {
-            Station fromStation = stationMap.get(from);
-            Station toStation = stationMap.get(to);
-            if (fromStation != null && toStation != null) {
-                if (fromStation.getNeighborDistances() == null) {
-                    fromStation.setNeighborDistances(new HashMap<>());
-                }
-                if (toStation.getNeighborDistances() == null) {
-                    toStation.setNeighborDistances(new HashMap<>());
-                }
-                fromStation.getNeighborDistances().put(toStation, DISTANCE_BETWEEN_STATIONS_KM);
-                toStation.getNeighborDistances().put(fromStation, DISTANCE_BETWEEN_STATIONS_KM);
+        // Derive all neighbor connections from route definitions
+        // Consecutive stations in any route are neighbors
+        for (RouteDefinition routeDef : ROUTE_DEFINITIONS) {
+            List<String> stationNames = routeDef.stationNames();
+            for (int i = 0; i < stationNames.size() - 1; i++) {
+                connectStations(stationMap, stationNames.get(i), stationNames.get(i + 1));
             }
-        };
-
-        // Rīga connections
-        connect.accept("Rīga", "Vagonu parks");
-        connect.accept("Rīga", "Torņakalns");
-        connect.accept("Rīga", "Zemitāni");
-
-        // Eastern route (Rīga -> Krustpils)
-        String[] easternStations = {"Vagonu parks", "Jāņavārti", "Daugmale", "Šķirotava", "Gaisma",
-                "Rumbula", "Dārziņi", "Dole", "Salaspils", "Saulkalne", "Ikšķile", "Jaunogre",
-                "Ogre", "Pārogre", "Ciemupe", "Ķegums", "Lielvārde", "Kaibala", "Jumprava",
-                "Skrīveri", "Muldakmens", "Aizkraukle", "Koknese", "Alotene", "Pļaviņas", "Krustpils"};
-        for (int i = 0; i < easternStations.length - 1; i++) {
-            connect.accept(easternStations[i], easternStations[i + 1]);
         }
+    }
 
-        // Krustpils connections to branch routes
-        connect.accept("Krustpils", "Trepe");
-        connect.accept("Krustpils", "Kūkas");
-        connect.accept("Krustpils", "Jaunkalsnava");
-
-        // Indra route (from Krustpils)
-        String[] indraStations = {"Trepe", "Līvāni", "Jersika", "Nīcgale", "Vabole", "Līksna",
-                "Daugavpils", "Krāslava", "Indra"};
-        for (int i = 0; i < indraStations.length - 1; i++) {
-            connect.accept(indraStations[i], indraStations[i + 1]);
-        }
-
-        // Zilupe route (from Krustpils)
-        String[] zilupeStations = {"Kūkas", "Mežāre", "Atašiene", "Stirniene", "Varakļāni", "Viļāni",
-                "Sakstagals", "Rēzekne", "Taudejāni", "Cirma", "Ludza", "Istalsna", "Nerza", "Briģi", "Zilupe"};
-        for (int i = 0; i < zilupeStations.length - 1; i++) {
-            connect.accept(zilupeStations[i], zilupeStations[i + 1]);
-        }
-
-        // Gulbene route (from Krustpils)
-        String[] gulbeneStations = {"Jaunkalsnava", "Kalsnava", "Mārciena", "Madona", "Cesvaine",
-                "Jaungulbene", "Gulbene"};
-        for (int i = 0; i < gulbeneStations.length - 1; i++) {
-            connect.accept(gulbeneStations[i], gulbeneStations[i + 1]);
-        }
-
-        // Torņakalns connections
-        connect.accept("Torņakalns", "Bieriņi / Bērnu slimnīca");
-        connect.accept("Torņakalns", "Zasulauks");
-
-        // Liepāja route
-        String[] liepajaStations = {"Bieriņi / Bērnu slimnīca", "BA Turība", "Tīraine", "Medemciems",
-                "Jaunolaine", "Olaine", "Dalbe", "Cena", "Ozolnieki", "Cukurfabrika", "Jelgava",
-                "Dobele", "Biksti", "Saldus", "Skrunda", "Liepāja"};
-        for (int i = 0; i < liepajaStations.length - 1; i++) {
-            connect.accept(liepajaStations[i], liepajaStations[i + 1]);
-        }
-
-        // Tukums route
-        String[] tukumsStations = {"Zasulauks", "Depo", "Zolitūde", "Imanta", "Babīte", "Priedaine",
-                "Lielupe", "Bulduri", "Dzintari", "Majori", "Dubulti", "Jaundubulti", "Pumpuri",
-                "Melluži", "Asari", "Vaivari", "Sloka", "Kūdra", "Ķemeri", "Smārde", "Milzkalne",
-                "Tukums I", "Tukums II"};
-        for (int i = 0; i < tukumsStations.length - 1; i++) {
-            connect.accept(tukumsStations[i], tukumsStations[i + 1]);
-        }
-
-        // Zemitāni connections
-        connect.accept("Zemitāni", "Čiekurkalns");
-        connect.accept("Zemitāni", "Brasa");
-
-        // Valga route
-        String[] valgaStations = {"Čiekurkalns", "Šmerlis", "Jugla", "Garkalne", "Krievupe", "Vangaži",
-                "Inčukalns", "Egļupe", "Sigulda", "Līgatne", "Ieriķi", "Melturi", "Āraiši", "Cēsis",
-                "Jānamuiža", "Lode", "Valmiera", "Strenči", "Lugaži", "Valga"};
-        for (int i = 0; i < valgaStations.length - 1; i++) {
-            connect.accept(valgaStations[i], valgaStations[i + 1]);
-        }
-
-        // Skulte route
-        String[] skulteStations = {"Brasa", "Sarkandaugava", "Dauderi", "Mangaļi", "Ziemeļblāzma",
-                "Vecdaugava", "Vecāķi", "Kalngale", "Garciems", "Garupe", "Carnikava", "Gauja",
-                "Lilaste", "Inčupe", "Pabaži", "Saulkrasti", "Ķīšupe", "Zvejniekciems", "Skulte"};
-        for (int i = 0; i < skulteStations.length - 1; i++) {
-            connect.accept(skulteStations[i], skulteStations[i + 1]);
+    private void connectStations(Map<String, Station> stationMap, String fromName, String toName) {
+        Station fromStation = stationMap.get(fromName);
+        Station toStation = stationMap.get(toName);
+        if (fromStation != null && toStation != null) {
+            if (fromStation.getNeighborDistances() == null) {
+                fromStation.setNeighborDistances(new HashMap<>());
+            }
+            if (toStation.getNeighborDistances() == null) {
+                toStation.setNeighborDistances(new HashMap<>());
+            }
+            fromStation.getNeighborDistances().put(toStation, DISTANCE_BETWEEN_STATIONS_KM);
+            toStation.getNeighborDistances().put(fromStation, DISTANCE_BETWEEN_STATIONS_KM);
         }
     }
 
@@ -269,80 +187,30 @@ public class DemoDataGenerator {
         List<Route> routes = new ArrayList<>();
         AtomicInteger idCounter = new AtomicInteger(1);
 
-        // Route 1: Rīga - Indra
-        routes.add(createRoute(idCounter, "Rīga - Indra", stationMap,
-                "Rīga", "Vagonu parks", "Jāņavārti", "Daugmale", "Šķirotava", "Gaisma",
-                "Rumbula", "Dārziņi", "Dole", "Salaspils", "Saulkalne", "Ikšķile", "Jaunogre",
-                "Ogre", "Pārogre", "Ciemupe", "Ķegums", "Lielvārde", "Kaibala", "Jumprava",
-                "Skrīveri", "Muldakmens", "Aizkraukle", "Koknese", "Alotene", "Pļaviņas", "Krustpils",
-                "Trepe", "Līvāni", "Jersika", "Nīcgale", "Vabole", "Līksna", "Daugavpils", "Krāslava", "Indra"));
-
-        // Route 2: Rīga - Zilupe
-        routes.add(createRoute(idCounter, "Rīga - Zilupe", stationMap,
-                "Rīga", "Vagonu parks", "Jāņavārti", "Daugmale", "Šķirotava", "Gaisma",
-                "Rumbula", "Dārziņi", "Dole", "Salaspils", "Saulkalne", "Ikšķile", "Jaunogre",
-                "Ogre", "Pārogre", "Ciemupe", "Ķegums", "Lielvārde", "Kaibala", "Jumprava",
-                "Skrīveri", "Muldakmens", "Aizkraukle", "Koknese", "Alotene", "Pļaviņas", "Krustpils",
-                "Kūkas", "Mežāre", "Atašiene", "Stirniene", "Varakļāni", "Viļāni", "Sakstagals",
-                "Rēzekne", "Taudejāni", "Cirma", "Ludza", "Istalsna", "Nerza", "Briģi", "Zilupe"));
-
-        // Route 3: Rīga - Gulbene
-        routes.add(createRoute(idCounter, "Rīga - Gulbene", stationMap,
-                "Rīga", "Vagonu parks", "Jāņavārti", "Daugmale", "Šķirotava", "Gaisma",
-                "Rumbula", "Dārziņi", "Dole", "Salaspils", "Saulkalne", "Ikšķile", "Jaunogre",
-                "Ogre", "Pārogre", "Ciemupe", "Ķegums", "Lielvārde", "Kaibala", "Jumprava",
-                "Skrīveri", "Muldakmens", "Aizkraukle", "Koknese", "Alotene", "Pļaviņas", "Krustpils",
-                "Jaunkalsnava", "Kalsnava", "Mārciena", "Madona", "Cesvaine", "Jaungulbene", "Gulbene"));
-
-        // Route 4: Rīga - Liepāja
-        routes.add(createRoute(idCounter, "Rīga - Liepāja", stationMap,
-                "Rīga", "Torņakalns", "Bieriņi / Bērnu slimnīca", "BA Turība", "Tīraine",
-                "Medemciems", "Jaunolaine", "Olaine", "Dalbe", "Cena", "Ozolnieki", "Cukurfabrika",
-                "Jelgava", "Dobele", "Biksti", "Saldus", "Skrunda", "Liepāja"));
-
-        // Route 5: Rīga - Tukums II
-        routes.add(createRoute(idCounter, "Rīga - Tukums II", stationMap,
-                "Rīga", "Torņakalns", "Zasulauks", "Depo", "Zolitūde", "Imanta", "Babīte",
-                "Priedaine", "Lielupe", "Bulduri", "Dzintari", "Majori", "Dubulti", "Jaundubulti",
-                "Pumpuri", "Melluži", "Asari", "Vaivari", "Sloka", "Kūdra", "Ķemeri", "Smārde",
-                "Milzkalne", "Tukums I", "Tukums II"));
-
-        // Route 6: Rīga - Valga
-        routes.add(createRoute(idCounter, "Rīga - Valga", stationMap,
-                "Rīga", "Zemitāni", "Čiekurkalns", "Šmerlis", "Jugla", "Garkalne", "Krievupe",
-                "Vangaži", "Inčukalns", "Egļupe", "Sigulda", "Līgatne", "Ieriķi", "Melturi",
-                "Āraiši", "Cēsis", "Jānamuiža", "Lode", "Valmiera", "Strenči", "Lugaži", "Valga"));
-
-        // Route 7: Rīga - Skulte
-        routes.add(createRoute(idCounter, "Rīga - Skulte", stationMap,
-                "Rīga", "Zemitāni", "Brasa", "Sarkandaugava", "Dauderi", "Mangaļi", "Ziemeļblāzma",
-                "Vecdaugava", "Vecāķi", "Kalngale", "Garciems", "Garupe", "Carnikava", "Gauja",
-                "Lilaste", "Inčupe", "Pabaži", "Saulkrasti", "Ķīšupe", "Zvejniekciems", "Skulte"));
+        for (RouteDefinition routeDef : ROUTE_DEFINITIONS) {
+            List<Station> stations = new ArrayList<>();
+            for (String stationName : routeDef.stationNames()) {
+                Station station = stationMap.get(stationName);
+                if (station != null) {
+                    stations.add(station);
+                }
+            }
+            routes.add(new Route(String.valueOf(idCounter.getAndIncrement()), routeDef.name(), stations));
+        }
 
         return routes;
     }
 
-    private Route createRoute(AtomicInteger idCounter, String name, Map<String, Station> stationMap,
-                              String... stationNames) {
-        List<Station> stations = new ArrayList<>();
-        for (String stationName : stationNames) {
-            Station station = stationMap.get(stationName);
-            if (station != null) {
-                stations.add(station);
-            }
-        }
-        return new Route(String.valueOf(idCounter.getAndIncrement()), name, stations);
-    }
-
     private List<Depo> createDepos(Map<String, Station> stationMap) {
         List<Depo> depos = new ArrayList<>();
+        AtomicInteger idCounter = new AtomicInteger(1);
 
-        // Main depot at Rīga
-        depos.add(new Depo("1", stationMap.get("Rīga")));
-        // Eastern hub depot at Krustpils
-        depos.add(new Depo("2", stationMap.get("Krustpils")));
-        // Western depot at Jelgava
-        depos.add(new Depo("3", stationMap.get("Jelgava")));
+        for (String stationName : DEPOT_STATIONS) {
+            Station station = stationMap.get(stationName);
+            if (station != null) {
+                depos.add(new Depo(String.valueOf(idCounter.getAndIncrement()), station));
+            }
+        }
 
         return depos;
     }
@@ -414,30 +282,41 @@ public class DemoDataGenerator {
         List<Demand> demands = new ArrayList<>();
         AtomicInteger idCounter = new AtomicInteger(1);
 
-        // Major stations with higher demand
-        String[] majorStations = {"Rīga", "Krustpils", "Jelgava", "Daugavpils", "Rēzekne",
-                "Liepāja", "Sigulda", "Cēsis", "Valmiera", "Ogre", "Majori", "Gulbene"};
+        // Generate demand for ALL stations
+        for (Station station : stationMap.values()) {
+            String stationName = station.getName();
+            boolean isMajorHub = MAJOR_HUBS.contains(stationName);
+            boolean isCapital = "Rīga".equals(stationName);
 
-        for (String stationName : majorStations) {
-            Station station = stationMap.get(stationName);
-            if (station != null) {
-                Map<Integer, Integer> hourlyDemand = new HashMap<>();
+            Map<Integer, Integer> hourlyDemand = new HashMap<>();
 
-                // Generate demand for each hour (5:00 to 23:00)
-                for (int hour = 5; hour <= 23; hour++) {
-                    int baseDemand;
-                    if (stationName.equals("Rīga")) {
-                        baseDemand = 200 + random.nextInt(300); // High demand for capital
-                    } else if (hour >= 7 && hour <= 9 || hour >= 16 && hour <= 18) {
-                        baseDemand = 100 + random.nextInt(150); // Rush hours
+            // Generate demand for each hour (5:00 to 23:00)
+            for (int hour = 5; hour <= 23; hour++) {
+                int baseDemand;
+                boolean isRushHour = (hour >= 7 && hour <= 9) || (hour >= 16 && hour <= 18);
+
+                if (isCapital) {
+                    // Highest demand for capital city
+                    baseDemand = 200 + random.nextInt(300);
+                } else if (isMajorHub) {
+                    // Major hubs have higher demand
+                    if (isRushHour) {
+                        baseDemand = 100 + random.nextInt(150);
                     } else {
-                        baseDemand = 30 + random.nextInt(70); // Off-peak
+                        baseDemand = 30 + random.nextInt(70);
                     }
-                    hourlyDemand.put(hour, baseDemand);
+                } else {
+                    // Regular stations have lower demand
+                    if (isRushHour) {
+                        baseDemand = 20 + random.nextInt(40);
+                    } else {
+                        baseDemand = 5 + random.nextInt(20);
+                    }
                 }
-
-                demands.add(new Demand(String.valueOf(idCounter.getAndIncrement()), station, hourlyDemand));
+                hourlyDemand.put(hour, baseDemand);
             }
+
+            demands.add(new Demand(String.valueOf(idCounter.getAndIncrement()), station, hourlyDemand));
         }
 
         return demands;
