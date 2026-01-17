@@ -38,9 +38,6 @@ public class Ride implements Comparable<Ride> {
     // Arrival time (calculated based on distance and speed)
     private LocalDateTime arrivalTime;
 
-    // Number of passengers on this ride
-    private int passengerCount;
-
     // The train assigned to this ride - this is the planning variable
     @PlanningVariable
     private Train train;
@@ -91,14 +88,6 @@ public class Ride implements Comparable<Ride> {
         }
         return !arrivalTime.isBefore(other.departureTime) &&
                !other.arrivalTime.isBefore(departureTime);
-    }
-
-    /**
-     * Check if this ride exceeds the train's capacity.
-     */
-    @JsonIgnore
-    public boolean exceedsCapacity() {
-        return train != null && passengerCount > train.getCapacity();
     }
 
     /**
@@ -201,14 +190,6 @@ public class Ride implements Comparable<Ride> {
 
     public void setArrivalTime(LocalDateTime arrivalTime) {
         this.arrivalTime = arrivalTime;
-    }
-
-    public int getPassengerCount() {
-        return passengerCount;
-    }
-
-    public void setPassengerCount(int passengerCount) {
-        this.passengerCount = passengerCount;
     }
 
     public Train getTrain() {

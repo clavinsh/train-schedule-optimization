@@ -13,6 +13,7 @@ import ai.timefold.solver.core.api.score.stream.Constraint;
 import ai.timefold.solver.core.api.score.stream.ConstraintFactory;
 import ai.timefold.solver.core.api.score.stream.ConstraintProvider;
 
+import org.acme.RollingStockRosteringOptimization.domain.Demand;
 import org.acme.RollingStockRosteringOptimization.domain.Depo;
 import org.acme.RollingStockRosteringOptimization.domain.Ride;
 import org.acme.RollingStockRosteringOptimization.domain.Route;
@@ -54,12 +55,27 @@ public class RollingStockSchedulingConstraintProvider implements ConstraintProvi
     }
 
     /**
-     * Train cannot exceed its passenger capacity.
+     * Train cannot exceed its passenger capacity at any station.
+     * Penalize when the boarding demand at a station exceeds the train's capacity.
+     * Note: This is a simplified model that checks per-station demand vs capacity.
+     * A more complex model would track cumulative passengers across the route.
      */
     public Constraint capacityExceeded(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(Ride.class)
-                .filter(Ride::exceedsCapacity)
-                .penalize(HardSoftLongScore.ofHard(100))
+                .filter(ride -> ride.getTrain() != null)
+                .join(Demand.class,
+                        equal(Ride::getDepartureStation, Demand::getStation))
+                .filter((ride, demand) -> {
+                    int hour = ride.getDepartureTime().getHour();
+                    int boardingDemand = demand.getDemandAtHour(hour);
+                    return boardingDemand > ride.getTrain().getCapacity();
+                })
+                .penalize(HardSoftLongScore.ofHard(100),
+                        (ride, demand) -> {
+                            int hour = ride.getDepartureTime().getHour();
+                            int boardingDemand = demand.getDemandAtHour(hour);
+                            return boardingDemand - ride.getTrain().getCapacity();
+                        })
                 .asConstraint("Capacity exceeded");
     }
 
@@ -137,12 +153,20 @@ public class RollingStockSchedulingConstraintProvider implements ConstraintProvi
 
     /**
      * Maximize the number of passengers onloaded.
-     * Reward each passenger that is transported.
+     * Reward based on the demand served at each station (up to train capacity).
      */
     public Constraint maximizePassengersOnloaded(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(Ride.class)
                 .filter(ride -> ride.getTrain() != null)
-                .reward(HardSoftLongScore.ofSoft(1), Ride::getPassengerCount)
+                .join(Demand.class,
+                        equal(Ride::getDepartureStation, Demand::getStation))
+                .reward(HardSoftLongScore.ofSoft(1),
+                        (ride, demand) -> {
+                            int hour = ride.getDepartureTime().getHour();
+                            int boardingDemand = demand.getDemandAtHour(hour);
+                            // Reward for passengers served (limited by train capacity)
+                            return Math.min(boardingDemand, ride.getTrain().getCapacity());
+                        })
                 .asConstraint("Maximize passengers onloaded");
     }
 

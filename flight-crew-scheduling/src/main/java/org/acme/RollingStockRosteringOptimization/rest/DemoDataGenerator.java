@@ -256,9 +256,6 @@ public class DemoDataGenerator {
                 // Calculate arrival time
                 LocalDateTime arrivalTime = departureTime.plusMinutes((long) travelTimePerSegmentMinutes);
 
-                // Random passenger count (50-200)
-                int passengerCount = 50 + random.nextInt(151);
-
                 Ride ride = new Ride(
                         String.valueOf(rideCounter.getAndIncrement()),
                         route,
@@ -267,7 +264,6 @@ public class DemoDataGenerator {
                         departureTime,
                         arrivalTime
                 );
-                ride.setPassengerCount(passengerCount);
                 rides.add(ride);
 
                 // Next segment starts when this one ends (plus boarding time)

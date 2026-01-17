@@ -26,6 +26,9 @@ public class Train {
     // Current station where the train is located
     private Station currentStation;
 
+    // Current number of passengers on the train
+    private int currentPassengerCount;
+
     // Total distance traveled by this train in kilometers
     private double traveledDistanceKm;
 
@@ -48,10 +51,41 @@ public class Train {
     }
 
     /**
-     * Check if this train can accommodate the given number of passengers.
+     * Check if this train can accommodate the given number of additional passengers.
      */
-    public boolean canAccommodate(int passengerCount) {
-        return passengerCount <= capacity;
+    public boolean canAccommodate(int additionalPassengers) {
+        return currentPassengerCount + additionalPassengers <= capacity;
+    }
+
+    /**
+     * Check if the train has exceeded its capacity.
+     */
+    public boolean isOverCapacity() {
+        return currentPassengerCount > capacity;
+    }
+
+    /**
+     * Get the remaining capacity of this train.
+     */
+    public int getRemainingCapacity() {
+        return Math.max(0, capacity - currentPassengerCount);
+    }
+
+    /**
+     * Board passengers onto the train (up to remaining capacity).
+     * Returns the number of passengers actually boarded.
+     */
+    public int boardPassengers(int passengerCount) {
+        int canBoard = Math.min(passengerCount, getRemainingCapacity());
+        currentPassengerCount += canBoard;
+        return canBoard;
+    }
+
+    /**
+     * Alight all passengers from the train.
+     */
+    public void alightAllPassengers() {
+        currentPassengerCount = 0;
     }
 
     /**
@@ -100,6 +134,14 @@ public class Train {
 
     public void setCurrentStation(Station currentStation) {
         this.currentStation = currentStation;
+    }
+
+    public int getCurrentPassengerCount() {
+        return currentPassengerCount;
+    }
+
+    public void setCurrentPassengerCount(int currentPassengerCount) {
+        this.currentPassengerCount = currentPassengerCount;
     }
 
     public double getTraveledDistanceKm() {
