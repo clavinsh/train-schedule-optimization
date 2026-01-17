@@ -86,6 +86,38 @@ public class Route {
         return stations != null ? stations.indexOf(station) : -1;
     }
 
+    /**
+     * Get the number of segments in this route.
+     * A segment is a consecutive pair of stations.
+     */
+    @JsonIgnore
+    public int getSegmentCount() {
+        return stations != null && stations.size() > 1 ? stations.size() - 1 : 0;
+    }
+
+    /**
+     * Check if the given departure and arrival stations form a valid consecutive segment in this route.
+     */
+    public boolean isValidSegment(Station departure, Station arrival) {
+        if (stations == null || stations.size() < 2 || departure == null || arrival == null) {
+            return false;
+        }
+        int departureIndex = stations.indexOf(departure);
+        int arrivalIndex = stations.indexOf(arrival);
+        return departureIndex >= 0 && arrivalIndex == departureIndex + 1;
+    }
+
+    /**
+     * Get the segment index for a departure/arrival pair.
+     * Returns -1 if not a valid segment.
+     */
+    public int getSegmentIndex(Station departure, Station arrival) {
+        if (!isValidSegment(departure, arrival)) {
+            return -1;
+        }
+        return stations.indexOf(departure);
+    }
+
     @Override
     public String toString() {
         return name != null ? name : id;

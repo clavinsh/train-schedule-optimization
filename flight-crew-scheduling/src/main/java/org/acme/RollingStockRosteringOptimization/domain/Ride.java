@@ -101,6 +101,36 @@ public class Ride implements Comparable<Ride> {
         return train != null && passengerCount > train.getCapacity();
     }
 
+    /**
+     * Check if this ride covers a valid consecutive segment in its route.
+     */
+    @JsonIgnore
+    public boolean isValidRouteSegment() {
+        return route != null && route.isValidSegment(departureStation, arrivalStation);
+    }
+
+    /**
+     * Get the segment index this ride covers in its route.
+     * Returns -1 if not a valid segment.
+     */
+    @JsonIgnore
+    public int getRouteSegmentIndex() {
+        return route != null ? route.getSegmentIndex(departureStation, arrivalStation) : -1;
+    }
+
+    /**
+     * Get a unique key for grouping rides by route and segment.
+     * Format: "routeId:segmentIndex"
+     */
+    @JsonIgnore
+    public String getRouteSegmentKey() {
+        if (route == null) {
+            return null;
+        }
+        int segmentIndex = getRouteSegmentIndex();
+        return segmentIndex >= 0 ? route.getId() + ":" + segmentIndex : null;
+    }
+
     @Override
     public String toString() {
         return id + "(" + departureStation + "->" + arrivalStation + ")";

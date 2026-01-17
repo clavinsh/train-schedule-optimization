@@ -20,8 +20,8 @@ public class Train {
     // Maximum number of passengers this train can carry
     private int capacity;
 
-    // The depot where this train starts and ends its day
-    private Depo homeDepo;
+    // The depot assigned to this train
+    private Depo depo;
 
     // Current station where the train is located
     private Station currentStation;
@@ -41,10 +41,10 @@ public class Train {
         this.capacity = capacity;
     }
 
-    public Train(String id, int capacity, Depo homeDepo) {
+    public Train(String id, int capacity, Depo depo) {
         this.id = id;
         this.capacity = capacity;
-        this.homeDepo = homeDepo;
+        this.depo = depo;
     }
 
     /**
@@ -86,12 +86,12 @@ public class Train {
         this.capacity = capacity;
     }
 
-    public Depo getHomeDepo() {
-        return homeDepo;
+    public Depo getDepo() {
+        return depo;
     }
 
-    public void setHomeDepo(Depo homeDepo) {
-        this.homeDepo = homeDepo;
+    public void setDepo(Depo depo) {
+        this.depo = depo;
     }
 
     public Station getCurrentStation() {
