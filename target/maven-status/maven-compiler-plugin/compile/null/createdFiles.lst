@@ -1,0 +1,12 @@
+org\acme\rollingstockrostering\rest\ScheduleResource.class
+org\acme\rollingstockrostering\domain\Konfiguracija.class
+org\acme\rollingstockrostering\domain\Stacija.class
+org\acme\rollingstockrostering\rest\DemoDataGenerator.class
+org\acme\rollingstockrostering\domain\Marsruts.class
+org\acme\rollingstockrostering\domain\Vilciens.class
+org\acme\rollingstockrostering\domain\RollingStockSchedule.class
+org\acme\rollingstockrostering\domain\GeoCoordinates.class
+org\acme\rollingstockrostering\domain\Depo.class
+org\acme\rollingstockrostering\domain\Brauciens.class
+org\acme\rollingstockrostering\domain\CilvekuPieprasijums.class
+org\acme\rollingstockrostering\solver\VilcienuConstraintProvider.class

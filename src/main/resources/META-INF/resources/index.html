@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vilcienu Kustības Optimizācija - Rolling Stock Rostering</title>
+    <link rel="stylesheet" href="/webjars/bootstrap/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="/webjars/font-awesome/css/all.css"/>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --success-color: #16a34a;
+            --warning-color: #ca8a04;
+            --danger-color: #dc2626;
+            --gray-color: #9ca3af;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            color: white;
+            padding: 1.5rem 0;
+            margin-bottom: 2rem;
+        }
+        
+        .score-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            margin-bottom: 1rem;
+        }
+        
+        .score-hard {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--danger-color);
+        }
+        
+        .score-soft {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .score-feasible {
+            color: var(--success-color);
+        }
+        
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        
+        .status-solving {
+            background-color: #fef3c7;
+            color: #92400e;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-not-solving {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .timeline-container {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            overflow-x: auto;
+        }
+        
+        .train-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.25rem;
+            min-height: 35px;
+        }
+        
+        .train-label {
+            width: 100px;
+            font-weight: 600;
+            flex-shrink: 0;
+            padding-right: 0.5rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+        
+        .train-label:hover {
+            text-decoration: underline;
+        }
+        
+        .train-timeline {
+            flex-grow: 1;
+            position: relative;
+            height: 28px;
+            background: #f1f5f9;
+            border-radius: 4px;
+            min-width: 900px;
+        }
+        
+        .trip-block {
+            position: absolute;
+            height: 24px;
+            top: 2px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            border: 2px solid rgba(255,255,255,0.3);
+            overflow: hidden;
+            white-space: nowrap;
+            padding: 0 4px;
+        }
+        
+        .trip-block:hover {
+            transform: scaleY(1.3);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 100;
+        }
+        
+        .trip-unassigned {
+            background: repeating-linear-gradient(
+                45deg,
+                #9ca3af,
+                #9ca3af 5px,
+                #6b7280 5px,
+                #6b7280 10px
+            );
+        }
+        
+        .time-axis {
+            display: flex;
+            margin-left: 100px;
+            margin-bottom: 0.5rem;
+            min-width: 900px;
+        }
+        
+        .time-label {
+            flex: 1;
+            text-align: center;
+            font-size: 0.75rem;
+            color: #64748b;
+            border-left: 1px dashed #cbd5e1;
+            padding-left: 4px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 0.5rem;
+            background: #f8fafc;
+            border-radius: 8px;
+        }
+        
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .stat-label {
+            font-size: 0.7rem;
+            color: #64748b;
+        }
+        
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+            margin-top: 0.5rem;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.15rem 0.5rem;
+            background: #f8fafc;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            cursor: pointer;
+        }
+        
+        .legend-item:hover {
+            background: #e2e8f0;
+        }
+        
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+        
+        .btn-solve {
+            background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+            border: none;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+        }
+        
+        .btn-stop {
+            background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+            border: none;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+        }
+        
+        .tooltip-custom {
+            position: fixed;
+            background: #1e293b;
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            z-index: 1000;
+            pointer-events: none;
+            max-width: 400px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+        
+        .explanation-card {
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .nav-tabs .nav-link.active {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        
+        .trip-table {
+            font-size: 0.8rem;
+        }
+        
+        .trip-table th {
+            background: #f1f5f9;
+            position: sticky;
+            top: 0;
+        }
+        
+        .direction-badge {
+            font-size: 0.65rem;
+            padding: 0.1rem 0.3rem;
+        }
+        
+        .stop-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .stop-item {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem;
+            background: #f8fafc;
+            border-radius: 4px;
+            border-left: 3px solid #3b82f6;
+        }
+        
+        .stop-time {
+            width: 60px;
+            font-weight: bold;
+            color: #1e3a8a;
+        }
+        
+        .stop-name {
+            flex-grow: 1;
+        }
+        
+        .stop-connector {
+            width: 2px;
+            height: 20px;
+            background: #cbd5e1;
+            margin-left: 29px;
+        }
+        
+        .depo-card {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border: 1px solid #86efac;
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .depo-station {
+            font-weight: bold;
+            color: #166534;
+        }
+        
+        .train-chip {
+            display: inline-block;
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            margin: 0.1rem;
+            color: white;
+            cursor: pointer;
+        }
+        
+        .train-chip:hover {
+            opacity: 0.8;
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            color: white;
+        }
+        
+        .modal-header .btn-close {
+            filter: brightness(0) invert(1);
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="mb-0 h3"><i class="fas fa-train me-2"></i>Vilcienu Kustības Optimizācija</h1>
+                    <p class="mb-0 opacity-75 small">Rolling Stock Rostering - Timefold Solver</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button id="btnSolve" class="btn btn-solve btn-lg text-white" onclick="startSolving()">
+                        <i class="fas fa-play me-2"></i>Sākt
+                    </button>
+                    <button id="btnStop" class="btn btn-stop btn-lg text-white" onclick="stopSolving()" disabled>
+                        <i class="fas fa-stop me-2"></i>Apturēt
+                    </button>
+                    <button class="btn btn-warning btn-lg" onclick="analyzeConstraints()">
+                        <i class="fas fa-chart-bar me-2"></i>Analīze
+                    </button>
+                    <button class="btn btn-outline-light" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container-fluid px-4">
+        <div class="row">
+            <!-- Score and Status Panel -->
+            <div class="col-lg-3">
+                <div class="score-card">
+                    <h6><i class="fas fa-chart-line me-2"></i>Rezultāts</h6>
+                    <div class="d-flex justify-content-between mt-2">
+                        <div>
+                            <div class="text-muted small">Hard</div>
+                            <div id="hardScore" class="score-hard">0</div>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Soft</div>
+                            <div id="softScore" class="score-soft">0</div>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <span class="text-muted small">Status: </span>
+                        <span id="solverStatus" class="status-badge status-not-solving">NOT_SOLVING</span>
+                    </div>
+                    
+                    <div class="explanation-card mt-3">
+                        <h6 class="mb-2"><i class="fas fa-info-circle me-1"></i>Skaidrojums</h6>
+                        <ul class="mb-0 ps-3 small">
+                            <li><strong>Hard = 0</strong>: Nav konfliktu ✓</li>
+                            <li><strong>Hard &lt; 0</strong>: Vilciens nevar nokļūt laikā</li>
+                            <li><strong>Soft</strong>: Pasažieri - vilcienu izmaksas</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="score-card">
+                    <h6><i class="fas fa-cog me-2"></i>Datu Konfigurācija</h6>
+                    <form id="dataConfigForm" class="mt-3">
+                        <div class="mb-2">
+                            <label class="form-label small">Vilcienu skaits:</label>
+                            <select class="form-select form-select-sm" id="configTrainCount">
+                                <option value="3">3 vilcieni (mazs)</option>
+                                <option value="5" selected>5 vilcieni (vidējs)</option>
+                                <option value="8">8 vilcieni (liels)</option>
+                                <option value="12">12 vilcieni (ļoti liels)</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Laika periods:</label>
+                            <select class="form-select form-select-sm" id="configTimePeriod">
+                                <option value="8-14">8:00-14:00 (6h)</option>
+                                <option value="8-18" selected>8:00-18:00 (10h)</option>
+                                <option value="6-20">6:00-20:00 (14h)</option>
+                                <option value="6-22">6:00-22:00 (16h)</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Braucienu intervāls:</label>
+                            <select class="form-select form-select-sm" id="configTripInterval">
+                                <option value="4">4 stundas (maz braucienu)</option>
+                                <option value="3" selected>3 stundas (vidēji)</option>
+                                <option value="2">2 stundas (daudz)</option>
+                                <option value="1">1 stunda (ļoti daudz)</option>
+                            </select>
+                        </div>
+                        <button type="button" class="btn btn-primary btn-sm w-100" onclick="generateNewData()">
+                            <i class="fas fa-refresh me-1"></i>Ģenerēt jaunus datus
+                        </button>
+                    </form>
+                </div>
+
+                <div class="score-card">
+                    <h6><i class="fas fa-info-circle me-2"></i>Statistika</h6>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div id="trainCount" class="stat-value">0</div>
+                            <div class="stat-label">Vilcieni</div>
+                        </div>
+                        <div class="stat-item">
+                            <div id="routeCount" class="stat-value">0</div>
+                            <div class="stat-label">Maršruti</div>
+                        </div>
+                        <div class="stat-item">
+                            <div id="tripCount" class="stat-value">0</div>
+                            <div class="stat-label">Braucieni</div>
+                        </div>
+                        <div class="stat-item">
+                            <div id="assignedCount" class="stat-value">0</div>
+                            <div class="stat-label">Piešķirti</div>
+                        </div>
+                        <div class="stat-item">
+                            <div id="usedTrainCount" class="stat-value">0</div>
+                            <div class="stat-label">Izmantoti</div>
+                        </div>
+                        <div class="stat-item">
+                            <div id="totalPassengers" class="stat-value">0</div>
+                            <div class="stat-label">Pasažieri</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="score-card">
+                    <h6><i class="fas fa-warehouse me-2"></i>Depo (Sākuma Stacijas)</h6>
+                    <div id="depoList"></div>
+                </div>
+                
+                <div class="score-card">
+                    <h6><i class="fas fa-palette me-2"></i>Vilcienu Krāsas</h6>
+                    <div id="legend" class="legend"></div>
+                </div>
+            </div>
+
+            <!-- Timeline Visualization -->
+            <div class="col-lg-9">
+                <div class="timeline-container">
+                    <ul class="nav nav-tabs" id="viewTabs" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#timelineView">
+                                <i class="fas fa-calendar-alt me-1"></i>Grafiks pa Vilcieniem
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tripListView">
+                                <i class="fas fa-list me-1"></i>Braucienu Saraksts
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content mt-3">
+                        <div class="tab-pane fade show active" id="timelineView">
+                            <p class="text-muted small mb-2">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Katrs bloks = viens brauciens (pilns maršruts). 
+                                <strong>Klikšķini uz bloka</strong> lai redzētu detalizētu pieturu sarakstu.
+                            </p>
+                            <div class="time-axis" id="timeAxis"></div>
+                            <div id="timeline" class="timeline"></div>
+                        </div>
+                        <div class="tab-pane fade" id="tripListView">
+                            <div id="tripList" style="max-height: 600px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tooltip" class="tooltip-custom" style="display: none;"></div>
+    
+    <!-- Trip Details Modal -->
+    <div class="modal fade" id="tripModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-route me-2"></i>Brauciena Detaļas</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="tripModalBody">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Train Details Modal -->
+    <div class="modal fade" id="trainModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-train me-2"></i>Vilciena Detaļas</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="trainModalBody">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Constraint Analysis Modal -->
+    <div class="modal fade" id="constraintModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-chart-bar me-2"></i>Ierobežojumu Analīze</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="constraintModalBody">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Analizē ierobežojumus...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/webjars/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Generate distinct colors for trains using HSL
+        function generateTrainColors(count) {
+            const colors = [];
+            for (let i = 0; i < count; i++) {
+                const hue = (i * 360 / count) % 360;
+                const saturation = 70 + (i % 3) * 10;
+                const lightness = 40 + (i % 2) * 10;
+                colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
+            }
+            return colors;
+        }
+        
+        let scheduleData = null;
+        let refreshInterval = null;
+        let trainColorMap = {};
+        let stationMap = {};
+        let routeMap = {};
+        let depoMap = {};
+        let tripModal = null;
+        let trainModal = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            tripModal = new bootstrap.Modal(document.getElementById('tripModal'));
+            trainModal = new bootstrap.Modal(document.getElementById('trainModal'));
+            refreshData();
+        });
+        
+        // Format time string to HH:mm (remove seconds if present)
+        function formatTime(timeStr) {
+            if (!timeStr) return '??:??';
+            // Handle both "HH:mm" and "HH:mm:ss" formats
+            const parts = timeStr.split(':');
+            if (parts.length >= 2) {
+                return parts[0] + ':' + parts[1];
+            }
+            return timeStr;
+        }
+
+        async function refreshData() {
+            try {
+                const response = await fetch('/schedule');
+                if (!response.ok) throw new Error('Failed to fetch schedule');
+                scheduleData = await response.json();
+                updateUI();
+            } catch (error) {
+                console.error('Error fetching schedule:', error);
+            }
+        }
+
+        function updateUI() {
+            if (!scheduleData) return;
+            
+            // Build maps
+            stationMap = {};
+            scheduleData.stacijas?.forEach(s => stationMap[s.id] = s);
+            
+            routeMap = {};
+            scheduleData.marsruti?.forEach(r => routeMap[r.id] = r);
+            
+            // Build depo map: stationId -> [trainIds]
+            depoMap = {};
+            scheduleData.depiList?.forEach(d => {
+                if (!depoMap[d.stacijaId]) depoMap[d.stacijaId] = [];
+                depoMap[d.stacijaId].push(d.vilciensId);
+            });
+            
+            // Assign colors to trains
+            const trainCount = scheduleData.vilcieni?.length || 0;
+            const colors = generateTrainColors(trainCount);
+            trainColorMap = {};
+            scheduleData.vilcieni?.forEach((train, index) => {
+                trainColorMap[train.id] = colors[index];
+            });
+            
+            updateScore();
+            updateStatus();
+            updateStats();
+            updateDepoList();
+            updateLegend();
+            updateTimeline();
+            updateTripList();
+        }
+
+        function updateScore() {
+            const score = scheduleData.score;
+            if (score) {
+                const scoreStr = typeof score === 'string' ? score : JSON.stringify(score);
+                const hardMatch = scoreStr.match(/(-?\d+)hard/);
+                const softMatch = scoreStr.match(/(-?\d+)soft/);
+                
+                const hard = hardMatch ? parseInt(hardMatch[1]) : 0;
+                const soft = softMatch ? parseInt(softMatch[1]) : 0;
+                
+                document.getElementById('hardScore').textContent = hard;
+                document.getElementById('softScore').textContent = soft;
+                
+                const hardEl = document.getElementById('hardScore');
+                if (hard >= 0) {
+                    hardEl.classList.add('score-feasible');
+                    hardEl.classList.remove('score-hard');
+                } else {
+                    hardEl.classList.remove('score-feasible');
+                    hardEl.classList.add('score-hard');
+                }
+            } else {
+                document.getElementById('hardScore').textContent = '-';
+                document.getElementById('softScore').textContent = '-';
+            }
+        }
+
+        function updateStatus() {
+            const status = scheduleData.solverStatus || 'NOT_SOLVING';
+            const statusEl = document.getElementById('solverStatus');
+            statusEl.textContent = status;
+            
+            const btnSolve = document.getElementById('btnSolve');
+            const btnStop = document.getElementById('btnStop');
+            
+            if (status === 'SOLVING_ACTIVE') {
+                statusEl.className = 'status-badge status-solving';
+                btnSolve.disabled = true;
+                btnStop.disabled = false;
+                
+                if (!refreshInterval) {
+                    refreshInterval = setInterval(refreshData, 2000);
+                }
+            } else {
+                statusEl.className = 'status-badge status-not-solving';
+                btnSolve.disabled = false;
+                btnStop.disabled = true;
+                
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = null;
+                }
+            }
+        }
+
+        function updateStats() {
+            const trains = scheduleData.vilcieni?.length || 0;
+            const routes = scheduleData.marsruti?.length || 0;
+            const trips = scheduleData.braucieni?.length || 0;
+            const assigned = scheduleData.braucieni?.filter(b => b.vilciens != null).length || 0;
+            
+            // Count unique trains used
+            const usedTrains = new Set(
+                scheduleData.braucieni
+                    ?.filter(b => b.vilciens != null)
+                    .map(b => b.vilciens.id)
+            ).size;
+            
+            // Total passengers
+            const totalPass = scheduleData.braucieni
+                ?.filter(b => b.vilciens != null)
+                .reduce((sum, b) => sum + (b.kopejaisPasazieru || 0), 0) || 0;
+            
+            document.getElementById('trainCount').textContent = trains;
+            document.getElementById('routeCount').textContent = routes;
+            document.getElementById('tripCount').textContent = trips;
+            document.getElementById('assignedCount').textContent = assigned;
+            document.getElementById('usedTrainCount').textContent = usedTrains;
+            document.getElementById('totalPassengers').textContent = totalPass;
+        }
+        
+        function updateDepoList() {
+            const container = document.getElementById('depoList');
+            let html = '';
+            
+            for (const [stationId, trainIds] of Object.entries(depoMap)) {
+                const station = stationMap[stationId];
+                html += `
+                    <div class="depo-card">
+                        <div class="depo-station">
+                            <i class="fas fa-warehouse me-1"></i>${station?.nosaukums || 'Stacija ' + stationId}
+                        </div>
+                        <div class="mt-1">
+                            ${trainIds.map(tid => `
+                                <span class="train-chip" style="background-color: ${trainColorMap[tid]}" 
+                                      onclick="showTrainDetails(${tid})">
+                                    V${tid}
+                                </span>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = html || '<p class="text-muted small">Nav depo datu</p>';
+        }
+
+        function updateLegend() {
+            const container = document.getElementById('legend');
+            const trips = scheduleData.braucieni || [];
+            
+            // Only show trains that are actually used
+            const usedTrainIds = [...new Set(
+                trips.filter(t => t.vilciens).map(t => t.vilciens.id)
+            )].sort((a, b) => a - b);
+            
+            let html = usedTrainIds.map(trainId => `
+                <div class="legend-item" onclick="showTrainDetails(${trainId})">
+                    <div class="legend-color" style="background-color: ${trainColorMap[trainId]}"></div>
+                    <span>V${trainId}</span>
+                </div>
+            `).join('');
+            
+            html += `
+                <div class="legend-item">
+                    <div class="legend-color trip-unassigned"></div>
+                    <span>Nav</span>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+
+        function updateTimeline() {
+            // Build time axis (5:00 - 24:00)
+            const timeAxis = document.getElementById('timeAxis');
+            let timeHtml = '';
+            for (let hour = 5; hour <= 24; hour++) {
+                timeHtml += `<div class="time-label">${hour.toString().padStart(2, '0')}:00</div>`;
+            }
+            timeAxis.innerHTML = timeHtml;
+            
+            // Group trips by train
+            const timeline = document.getElementById('timeline');
+            const trips = scheduleData.braucieni || [];
+            const trains = scheduleData.vilcieni || [];
+            
+            // Get trains that have trips assigned
+            const trainGroups = {};
+            trips.forEach(trip => {
+                const trainId = trip.vilciens?.id || 'unassigned';
+                if (!trainGroups[trainId]) {
+                    trainGroups[trainId] = [];
+                }
+                trainGroups[trainId].push(trip);
+            });
+            
+            // Sort trains by ID
+            const sortedTrainIds = Object.keys(trainGroups)
+                .filter(id => id !== 'unassigned')
+                .map(id => parseInt(id))
+                .sort((a, b) => a - b);
+            
+            let html = '';
+            
+            // Show each train's timeline
+            sortedTrainIds.forEach(trainId => {
+                const trainTrips = trainGroups[trainId] || [];
+                const train = trains.find(t => t.id === trainId);
+                
+                html += `
+                    <div class="train-row">
+                        <div class="train-label" style="color: ${trainColorMap[trainId]}" onclick="showTrainDetails(${trainId})">
+                            <i class="fas fa-train me-1"></i>V${trainId}
+                        </div>
+                        <div class="train-timeline">
+                            ${trainTrips.map(trip => renderTrip(trip)).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            // Show unassigned trips
+            const unassignedTrips = trainGroups['unassigned'] || [];
+            if (unassignedTrips.length > 0) {
+                html += `
+                    <div class="train-row">
+                        <div class="train-label text-muted">
+                            <i class="fas fa-question me-1"></i>Nav
+                        </div>
+                        <div class="train-timeline">
+                            ${unassignedTrips.map(trip => renderTrip(trip)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            timeline.innerHTML = html;
+            
+            // Add hover and click events
+            document.querySelectorAll('.trip-block').forEach(el => {
+                el.addEventListener('mouseenter', showTooltip);
+                el.addEventListener('mouseleave', hideTooltip);
+                el.addEventListener('mousemove', moveTooltip);
+                el.addEventListener('click', () => showTripDetails(parseInt(el.dataset.tripId)));
+            });
+        }
+
+        function renderTrip(trip) {
+            // Parse times
+            const startTime = trip.sakumaLaiks || '06:00';
+            const endTime = trip.beidzasLaiks || '07:00';
+            
+            const [startH, startM] = startTime.split(':').map(Number);
+            const [endH, endM] = endTime.split(':').map(Number);
+            
+            const startMinutes = startH * 60 + startM;
+            const endMinutes = endH * 60 + endM;
+            
+            // Timeline range: 5:00 - 24:00 (19 hours = 1140 minutes)
+            const timelineStart = 5 * 60;
+            const timelineEnd = 24 * 60;
+            const timelineRange = timelineEnd - timelineStart;
+            
+            const leftPercent = ((startMinutes - timelineStart) / timelineRange) * 100;
+            const widthPercent = ((endMinutes - startMinutes) / timelineRange) * 100;
+            
+            const train = trip.vilciens;
+            const trainId = train?.id;
+            const color = trainId ? trainColorMap[trainId] : null;
+            const isAssigned = train != null;
+            
+            const route = routeMap[trip.marsrutaId];
+            const routeName = route?.nosaukums || `Maršruts ${trip.marsrutaId}`;
+            
+            const startStation = stationMap[trip.sakumaStacijaId];
+            const endStation = stationMap[trip.beidzasStacijaId];
+            
+            const classes = isAssigned ? 'trip-block' : 'trip-block trip-unassigned';
+            const style = isAssigned 
+                ? `background-color: ${color}; left: ${leftPercent}%; width: ${widthPercent}%;`
+                : `left: ${leftPercent}%; width: ${widthPercent}%;`;
+            
+            // Always show actual travel direction: FROM → TO
+            const fromAbbrev = startStation?.nosaukums?.substring(0, 3) || '?';
+            const toAbbrev = endStation?.nosaukums?.substring(0, 3) || '?';
+            const label = `${fromAbbrev}→${toAbbrev}`;
+            
+            return `
+                <div class="${classes}" style="${style}"
+                     data-trip-id="${trip.id}"
+                     data-start="${formatTime(startTime)}"
+                     data-end="${formatTime(endTime)}"
+                     data-route="${routeName}"
+                     data-from="${startStation?.nosaukums || 'Unknown'}"
+                     data-to="${endStation?.nosaukums || 'Unknown'}"
+                     data-train="${trainId || 'Nav piešķirts'}"
+                     data-passengers="${trip.kopejaisPasazieru || 0}"
+                     data-capacity="${train?.kapacitate || '-'}"
+                     data-stops="${trip.stacijuIds?.map(id => stationMap[id]?.nosaukums || id).join(' → ') || '-'}">
+                    ${label}
+                </div>
+            `;
+        }
+        
+        function showTripDetails(tripId) {
+            const trip = scheduleData.braucieni?.find(t => t.id === tripId);
+            if (!trip) return;
+            
+            const route = routeMap[trip.marsrutaId];
+            const train = trip.vilciens;
+            const startStation = stationMap[trip.sakumaStacijaId];
+            const endStation = stationMap[trip.beidzasStacijaId];
+            
+            // Build stop times display
+            let stopsHtml = '<div class="stop-timeline">';
+            
+            if (trip.pieturuLaiki && trip.stacijuIds) {
+                trip.stacijuIds.forEach((stationId, idx) => {
+                    const station = stationMap[stationId];
+                    const time = trip.pieturuLaiki[stationId];
+                    const isFirst = idx === 0;
+                    const isLast = idx === trip.stacijuIds.length - 1;
+                    
+                    stopsHtml += `
+                        <div class="stop-item" style="border-left-color: ${isFirst ? '#16a34a' : isLast ? '#dc2626' : '#3b82f6'}">
+                            <div class="stop-time">${formatTime(time)}</div>
+                            <div class="stop-name">
+                                ${isFirst ? '<i class="fas fa-play-circle text-success me-1"></i>' : ''}
+                                ${isLast ? '<i class="fas fa-flag-checkered text-danger me-1"></i>' : ''}
+                                ${station?.nosaukums || 'Stacija ' + stationId}
+                            </div>
+                        </div>
+                    `;
+                    
+                    if (!isLast) {
+                        stopsHtml += '<div class="stop-connector"></div>';
+                    }
+                });
+            } else {
+                stopsHtml += '<p class="text-muted">Pieturu laiki nav pieejami</p>';
+            }
+            
+            stopsHtml += '</div>';
+            
+            const modalBody = document.getElementById('tripModalBody');
+            modalBody.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-route me-2"></i>Maršruts</h6>
+                        <p class="mb-1"><strong>${route?.nosaukums || 'Nezināms'}</strong></p>
+                        <p class="text-muted small">${startStation?.nosaukums} → ${endStation?.nosaukums}</p>
+                        
+                        <h6 class="mt-3"><i class="fas fa-clock me-2"></i>Laiks</h6>
+                        <p><strong>${formatTime(trip.sakumaLaiks)} - ${formatTime(trip.beidzasLaiks)}</strong></p>
+                        
+                        <h6 class="mt-3"><i class="fas fa-train me-2"></i>Vilciens</h6>
+                        ${train ? `
+                            <p>
+                                <span class="badge" style="background-color: ${trainColorMap[train.id]}; font-size: 1rem;">
+                                    V${train.id}
+                                </span>
+                                <span class="text-muted ms-2">Kapacitāte: ${train.kapacitate}</span>
+                            </p>
+                        ` : '<p class="text-muted">Nav piešķirts</p>'}
+                        
+                        <h6 class="mt-3"><i class="fas fa-users me-2"></i>Pasažieri</h6>
+                        <p><strong>${trip.kopejaisPasazieru || 0}</strong> gaidāmie pasažieri</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-map-marker-alt me-2"></i>Pieturas</h6>
+                        ${stopsHtml}
+                    </div>
+                </div>
+            `;
+            
+            tripModal.show();
+        }
+        
+        function showTrainDetails(trainId) {
+            const train = scheduleData.vilcieni?.find(t => t.id === trainId);
+            if (!train) return;
+            
+            // Find depo
+            const depo = scheduleData.depiList?.find(d => d.vilciensId === trainId);
+            const depoStation = depo ? stationMap[depo.stacijaId] : null;
+            
+            // Find all trips for this train
+            const trainTrips = scheduleData.braucieni
+                ?.filter(b => b.vilciens?.id === trainId)
+                .sort((a, b) => a.sakumaLaiks.localeCompare(b.sakumaLaiks)) || [];
+            
+            const modalBody = document.getElementById('trainModalBody');
+            modalBody.innerHTML = `
+                <div class="text-center mb-3">
+                    <span class="badge" style="background-color: ${trainColorMap[trainId]}; font-size: 1.5rem; padding: 0.5rem 1rem;">
+                        <i class="fas fa-train me-2"></i>V${trainId}
+                    </span>
+                </div>
+                
+                <div class="row">
+                    <div class="col-6">
+                        <h6><i class="fas fa-users me-2"></i>Kapacitāte</h6>
+                        <p><strong>${train.kapacitate}</strong> vietas</p>
+                    </div>
+                    <div class="col-6">
+                        <h6><i class="fas fa-warehouse me-2"></i>Depo (Sākuma stacija)</h6>
+                        <p><strong>${depoStation?.nosaukums || 'Nezināma'}</strong></p>
+                    </div>
+                </div>
+                
+                <h6 class="mt-3"><i class="fas fa-calendar-alt me-2"></i>Piešķirtie Braucieni (${trainTrips.length})</h6>
+                ${trainTrips.length > 0 ? `
+                    <table class="table table-sm">
+                        <thead>
+                            <tr><th>Laiks</th><th>Maršruts</th><th>Virziens</th></tr>
+                        </thead>
+                        <tbody>
+                            ${trainTrips.map(trip => {
+                                const route = routeMap[trip.marsrutaId];
+                                const fromStation = stationMap[trip.sakumaStacijaId];
+                                const toStation = stationMap[trip.beidzasStacijaId];
+                                return `
+                                    <tr style="cursor: pointer" onclick="trainModal.hide(); setTimeout(() => showTripDetails(${trip.id}), 300)">
+                                        <td>${formatTime(trip.sakumaLaiks)} - ${formatTime(trip.beidzasLaiks)}</td>
+                                        <td>${route?.nosaukums || '-'}</td>
+                                        <td>${fromStation?.nosaukums?.substring(0,3)} → ${toStation?.nosaukums?.substring(0,3)}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                ` : '<p class="text-muted">Nav piešķirtu braucienu</p>'}
+            `;
+            
+            trainModal.show();
+        }
+        
+        function updateTripList() {
+            const container = document.getElementById('tripList');
+            const trips = scheduleData.braucieni || [];
+            
+            // Sort by start time
+            const sortedTrips = [...trips].sort((a, b) => {
+                const timeA = a.sakumaLaiks || '00:00';
+                const timeB = b.sakumaLaiks || '00:00';
+                return timeA.localeCompare(timeB);
+            });
+            
+            let html = `
+                <table class="table table-striped trip-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Laiks</th>
+                            <th>Maršruts</th>
+                            <th>Virziens</th>
+                            <th>Vilciens</th>
+                            <th>Pasažieri</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            sortedTrips.forEach((trip, idx) => {
+                const route = routeMap[trip.marsrutaId];
+                const startStation = stationMap[trip.sakumaStacijaId];
+                const endStation = stationMap[trip.beidzasStacijaId];
+                const train = trip.vilciens;
+                
+                html += `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td>${formatTime(trip.sakumaLaiks)} - ${formatTime(trip.beidzasLaiks)}</td>
+                        <td>${route?.nosaukums || '-'}</td>
+                        <td>
+                            <span class="badge bg-secondary direction-badge">
+                                ${startStation?.nosaukums?.substring(0, 3) || '?'} → ${endStation?.nosaukums?.substring(0, 3) || '?'}
+                            </span>
+                        </td>
+                        <td>
+                            ${train 
+                                ? `<span class="badge" style="background-color: ${trainColorMap[train.id]}">V${train.id}</span>`
+                                : '<span class="badge bg-light text-dark">Nav</span>'
+                            }
+                        </td>
+                        <td>${trip.kopejaisPasazieru || 0}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="showTripDetails(${trip.id})">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+        }
+
+        function showTooltip(e) {
+            const tooltip = document.getElementById('tooltip');
+            const el = e.target;
+            
+            tooltip.innerHTML = `
+                <div style="border-bottom: 1px solid #475569; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                    <strong><i class="fas fa-route me-1"></i>${el.dataset.route}</strong>
+                </div>
+                <strong>Laiks:</strong> ${el.dataset.start} - ${el.dataset.end}<br>
+                <strong>No:</strong> ${el.dataset.from}<br>
+                <strong>Uz:</strong> ${el.dataset.to}<br>
+                <div style="margin: 0.5rem 0; padding: 0.5rem; background: rgba(255,255,255,0.1); border-radius: 4px; font-size: 0.8rem;">
+                    <strong>Pieturas:</strong><br>
+                    ${el.dataset.stops}
+                </div>
+                <strong>Vilciens:</strong> ${el.dataset.train}<br>
+                <strong>Pasažieri:</strong> ${el.dataset.passengers}<br>
+                <strong>Kapacitāte:</strong> ${el.dataset.capacity}<br>
+                <div class="mt-2 text-info small"><i class="fas fa-mouse-pointer me-1"></i>Klikšķini lai redzētu vairāk</div>
+            `;
+            tooltip.style.display = 'block';
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').style.display = 'none';
+        }
+
+        function moveTooltip(e) {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.style.left = (e.clientX + 15) + 'px';
+            tooltip.style.top = (e.clientY + 15) + 'px';
+        }
+
+        async function startSolving() {
+            try {
+                const response = await fetch('/schedule/solve', { method: 'POST' });
+                if (!response.ok) throw new Error('Failed to start solver');
+                
+                refreshInterval = setInterval(refreshData, 2000);
+                refreshData();
+            } catch (error) {
+                console.error('Error starting solver:', error);
+                alert('Kļūda sākot optimizāciju: ' + error.message);
+            }
+        }
+
+        async function stopSolving() {
+            try {
+                const response = await fetch('/schedule/stop', { method: 'POST' });
+                if (!response.ok) throw new Error('Failed to stop solver');
+                
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = null;
+                }
+                refreshData();
+            } catch (error) {
+                console.error('Error stopping solver:', error);
+                alert('Kļūda apturot optimizāciju: ' + error.message);
+            }
+        }
+        
+        async function generateNewData() {
+            try {
+                const trainCount = document.getElementById('configTrainCount').value;
+                const timePeriod = document.getElementById('configTimePeriod').value;
+                const interval = document.getElementById('configTripInterval').value;
+                
+                // Parse time period (e.g., "8-18" -> start=8, end=18)
+                const [startHour, endHour] = timePeriod.split('-').map(Number);
+                
+                // Show loading
+                const btn = event.target;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Ģenerē...';
+                
+                const response = await fetch(
+                    `/schedule/generate?trainCount=${trainCount}&startHour=${startHour}&endHour=${endHour}&intervalHours=${interval}`,
+                    { method: 'POST' }
+                );
+                
+                if (!response.ok) throw new Error('Failed to generate data');
+                
+                scheduleData = await response.json();
+                updateUI();
+                
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-refresh me-1"></i>Ģenerēt jaunus datus';
+                
+                alert(`Jauni dati ģenerēti!\n\nVilcieni: ${trainCount}\nLaiks: ${startHour}:00-${endHour}:00\nIntervāls: ${interval}h`);
+            } catch (error) {
+                console.error('Error generating data:', error);
+                alert('Kļūda ģenerējot datus: ' + error.message);
+                event.target.disabled = false;
+                event.target.innerHTML = '<i class="fas fa-refresh me-1"></i>Ģenerēt jaunus datus';
+            }
+        }
+        
+        async function analyzeConstraints() {
+            if (!scheduleData) {
+                alert('Vispirms ielādējiet datus!');
+                return;
+            }
+            
+            if (!scheduleData.score) {
+                alert('Nav rezultāta, ko analizēt. Vispirms palaidiet optimizāciju!');
+                return;
+            }
+            
+            const modal = new bootstrap.Modal(document.getElementById('constraintModal'));
+            const modalBody = document.getElementById('constraintModalBody');
+            
+            // Show loading
+            modalBody.innerHTML = `
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Analizē ierobežojumus...</p>
+                </div>
+            `;
+            modal.show();
+            
+            try {
+                const response = await fetch('/schedule/analyze', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(scheduleData)
+                });
+                
+                if (!response.ok) throw new Error('Failed to analyze constraints');
+                
+                const analysis = await response.json();
+                displayConstraintAnalysis(analysis, modalBody);
+            } catch (error) {
+                console.error('Error analyzing constraints:', error);
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>Kļūda!</strong> Neizdevās analizēt ierobežojumus: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        function displayConstraintAnalysis(analysis, container) {
+            const scoreStr = analysis.score || '0hard/0soft';
+            const hardMatch = scoreStr.match(/(-?\d+)hard/);
+            const softMatch = scoreStr.match(/(-?\d+)soft/);
+            
+            const hardScore = hardMatch ? parseInt(hardMatch[1]) : 0;
+            const softScore = softMatch ? parseInt(softMatch[1]) : 0;
+            const isFeasible = hardScore === 0;
+            
+            let html = `
+                <div class="alert ${isFeasible ? 'alert-success' : 'alert-danger'}">
+                    <h5 class="alert-heading">
+                        ${isFeasible ? '✓ Risinājums ir pieņemams' : '✗ Risinājums NAV pieņemams'}
+                    </h5>
+                    <hr>
+                    <p class="mb-0">
+                        <strong>Hard Score:</strong> ${hardScore} 
+                        ${hardScore < 0 ? '(Ir hard constraint pārkāpumi!)' : '(Nav hard constraint pārkāpumu ✓)'}
+                        <br>
+                        <strong>Soft Score:</strong> ${softScore}
+                    </p>
+                </div>
+            `;
+            
+            if (analysis.constraints && analysis.constraints.length > 0) {
+                // Separate hard and soft constraints
+                const hardConstraints = analysis.constraints.filter(c => c.score.includes('hard') && !c.score.startsWith('0hard'));
+                const softConstraints = analysis.constraints.filter(c => c.score.includes('soft') && !c.score.startsWith('0soft'));
+                
+                if (hardConstraints.length > 0) {
+                    html += `
+                        <h6 class="mt-4 text-danger"><i class="fas fa-exclamation-triangle me-2"></i>Hard Ierobežojumu Pārkāpumi</h6>
+                        <div class="list-group">
+                    `;
+                    
+                    hardConstraints.forEach(constraint => {
+                        html += `
+                            <div class="list-group-item list-group-item-danger">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">${constraint.constraintName}</h6>
+                                        <small class="text-muted">${constraint.constraintPackage}</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-danger">${constraint.score}</span>
+                                        <br>
+                                        <small class="text-muted">${constraint.constraintMatchCount} pārkāpumi</small>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+                
+                if (softConstraints.length > 0) {
+                    html += `
+                        <h6 class="mt-4 text-primary"><i class="fas fa-info-circle me-2"></i>Soft Ierobežojumi (Optimizācija)</h6>
+                        <div class="list-group">
+                    `;
+                    
+                    softConstraints.forEach(constraint => {
+                        html += `
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">${constraint.constraintName}</h6>
+                                        <small class="text-muted">${constraint.constraintPackage}</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-primary">${constraint.score}</span>
+                                        <br>
+                                        <small class="text-muted">${constraint.constraintMatchCount} gadījumi</small>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+            } else {
+                html += `
+                    <div class="alert alert-success mt-3">
+                        <i class="fas fa-check-circle me-2"></i>
+                        Nav atrasti ierobežojumu pārkāpumi!
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
