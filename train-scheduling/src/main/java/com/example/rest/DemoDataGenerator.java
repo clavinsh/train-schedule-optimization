@@ -3,10 +3,14 @@ package com.example.rest;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
@@ -373,70 +377,79 @@ public class DemoDataGenerator {
     }
 
     /**
-     * Generate routes covering all major lines
+     * Generate routes covering all major lines, including reverse routes.
      */
     private static List<Route> generateRoutes(Map<Long, Station> stationMap) {
         List<Route> routes = new ArrayList<>();
+        AtomicLong nextRouteId = new AtomicLong(1L);
 
-        // Route 1: Riga -> Liepaja
-        routes.add(createRoute(1L, "Riga-Liepaja", stationMap,
-                1L, 3L, 61L, 62L, 63L, 64L, 65L, 66L, 67L, 68L, 69L, 70L, 71L, 72L, 73L, 74L, 75L, 76L));
+        // Helper function to create a list of stations from IDs
+        BiFunction<Map<Long, Station>, Long[], List<Station>> getStationsFromIds = (sMap, ids) -> {
+            List<Station> routeStations = new ArrayList<>();
+            for (Long stationId : ids) {
+                Station station = sMap.get(stationId);
+                if (station != null) {
+                    routeStations.add(station);
+                }
+            }
+            return routeStations;
+        };
 
-        // Route 2: Riga -> Tukums II (Jurmala coastal route)
-        routes.add(createRoute(2L, "Riga-Tukums II", stationMap,
+        // Helper function to add a route and its reverse
+        BiConsumer<String, Long[]> addRouteAndReverse = (namePrefix, stationIds) -> {
+            // Forward route
+            List<Station> forwardStations = getStationsFromIds.apply(stationMap, stationIds);
+            routes.add(new Route(nextRouteId.getAndIncrement(),
+                    namePrefix + " (" + forwardStations.get(0).getName() + "-" + forwardStations.get(forwardStations.size() - 1).getName() + ")",
+                    forwardStations));
+
+            // Reverse route
+            List<Station> reverseStations = new ArrayList<>(forwardStations);
+            Collections.reverse(reverseStations);
+            routes.add(new Route(nextRouteId.getAndIncrement(),
+                    namePrefix + " (" + reverseStations.get(0).getName() + "-" + reverseStations.get(reverseStations.size() - 1).getName() + ")",
+                    reverseStations));
+        };
+
+        // Define routes
+        addRouteAndReverse.accept("Riga-Liepaja", new Long[]{
+                1L, 3L, 61L, 62L, 63L, 64L, 65L, 66L, 67L, 68L, 69L, 70L, 71L, 72L, 73L, 74L, 75L, 76L});
+
+        addRouteAndReverse.accept("Riga-Tukums II", new Long[]{
                 1L, 3L, 87L, 88L, 89L, 90L, 91L, 92L, 93L, 94L, 95L, 96L, 97L, 98L, 99L, 100L,
-                101L, 102L, 103L, 104L, 105L, 106L, 107L, 108L, 109L));
+                101L, 102L, 103L, 104L, 105L, 106L, 107L, 108L, 109L});
 
-        // Route 3: Riga -> Valga
-        routes.add(createRoute(3L, "Riga-Valga", stationMap,
+        addRouteAndReverse.accept("Riga-Valga", new Long[]{
                 1L, 4L, 110L, 111L, 112L, 113L, 114L, 115L, 116L, 117L, 118L, 119L, 120L, 121L,
-                122L, 123L, 124L, 125L, 126L, 127L, 128L, 129L));
+                122L, 123L, 124L, 125L, 126L, 127L, 128L, 129L});
 
-        // Route 4: Riga -> Skulte
-        routes.add(createRoute(4L, "Riga-Skulte", stationMap,
+        addRouteAndReverse.accept("Riga-Skulte", new Long[]{
                 1L, 4L, 130L, 131L, 132L, 133L, 134L, 135L, 136L, 137L, 138L, 139L, 140L, 141L,
-                142L, 143L, 144L, 145L, 146L, 147L, 148L));
+                142L, 143L, 144L, 145L, 146L, 147L, 148L});
 
-        // Route 5: Riga -> Ogre (commuter route)
-        routes.add(createRoute(5L, "Riga-Ogre", stationMap,
-                1L, 2L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L));
+        addRouteAndReverse.accept("Riga-Ogre", new Long[]{
+                1L, 2L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L});
 
-        // Route 6: Riga -> Indra (via Daugavpils)
-        routes.add(createRoute(6L, "Riga-Indra", stationMap,
+        addRouteAndReverse.accept("Riga-Indra", new Long[]{
                 1L, 2L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L, 17L, 18L, 19L, 20L,
-                21L, 22L, 23L, 24L, 25L, 26L, 27L, 28L, 29L, 30L, 31L, 32L, 33L, 34L, 35L, 36L, 37L, 38L));
+                21L, 22L, 23L, 24L, 25L, 26L, 27L, 28L, 29L, 30L, 31L, 32L, 33L, 34L, 35L, 36L, 37L, 38L});
 
-        // Route 7: Riga -> Zilupe (via Rezekne)
-        routes.add(createRoute(7L, "Riga-Zilupe", stationMap,
+        addRouteAndReverse.accept("Riga-Zilupe", new Long[]{
                 1L, 2L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L, 17L, 18L, 19L, 20L,
                 21L, 22L, 23L, 24L, 25L, 26L, 27L, 28L, 29L, 39L, 40L, 41L, 42L, 43L, 44L, 45L,
-                46L, 47L, 48L, 49L, 50L, 51L, 52L, 53L));
+                46L, 47L, 48L, 49L, 50L, 51L, 52L, 53L});
 
-        // Route 8: Riga -> Gulbene (via Madona)
-        routes.add(createRoute(8L, "Riga-Gulbene", stationMap,
+        addRouteAndReverse.accept("Riga-Gulbene", new Long[]{
                 1L, 2L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L, 17L, 18L, 19L, 20L,
-                21L, 22L, 23L, 24L, 25L, 26L, 27L, 28L, 29L, 54L, 55L, 56L, 57L, 58L, 59L, 60L));
+                21L, 22L, 23L, 24L, 25L, 26L, 27L, 28L, 29L, 54L, 55L, 56L, 57L, 58L, 59L, 60L});
 
-        // Route 9: Riga -> Jelgava (commuter route)
-        routes.add(createRoute(9L, "Riga-Jelgava", stationMap,
-                1L, 3L, 61L, 62L, 63L, 64L, 65L, 66L, 67L, 68L, 69L, 70L, 71L));
+        addRouteAndReverse.accept("Riga-Jelgava", new Long[]{
+                1L, 3L, 61L, 62L, 63L, 64L, 65L, 66L, 67L, 68L, 69L, 70L, 71L});
 
-        // Route 10: Riga -> Jurmala (short commuter)
-        routes.add(createRoute(10L, "Riga-Jurmala", stationMap,
-                1L, 3L, 87L, 88L, 89L, 90L, 91L, 92L, 93L, 94L, 95L, 96L, 97L));
+        addRouteAndReverse.accept("Riga-Jurmala", new Long[]{
+                1L, 3L, 87L, 88L, 89L, 90L, 91L, 92L, 93L, 94L, 95L, 96L, 97L});
 
         return routes;
-    }
-
-    private static Route createRoute(Long id, String name, Map<Long, Station> stationMap, Long... stationIds) {
-        List<Station> routeStations = new ArrayList<>();
-        for (Long stationId : stationIds) {
-            Station station = stationMap.get(stationId);
-            if (station != null) {
-                routeStations.add(station);
-            }
-        }
-        return new Route(id, name, routeStations);
     }
 
     /**
