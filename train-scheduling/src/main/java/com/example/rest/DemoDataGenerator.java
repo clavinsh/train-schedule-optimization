@@ -17,10 +17,13 @@ import com.example.domain.TrainConfiguration;
 import com.example.domain.Trip;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @ApplicationScoped
 public class DemoDataGenerator {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(DemoDataGenerator.class);
     private static final Random RANDOM = new Random(37);
 
     public RollingStockSchedule generateDemoData() {
@@ -38,7 +41,7 @@ public class DemoDataGenerator {
         List<Station> stations = generateStations(stationMap, configuration);
 
         List<Route> routes = generateRoutes(stationMap);
-        List<Train> trains = generateTrains(4);
+        List<Train> trains = generateTrains(6);
         List<Depo> depos = generateDepos(stationMap, trains);
         
         // Assign home depos to trains
@@ -106,10 +109,16 @@ public class DemoDataGenerator {
 
     private static List<Route> generateRoutes(Map<Long, Station> stationMap) {
         List<Route> routes = new ArrayList<>();
+        // Main routes
         routes.add(new Route(1L, "Riga-Liepaja", List.of(stationMap.get(1L), stationMap.get(2L), stationMap.get(3L))));
         routes.add(new Route(2L, "Liepaja-Riga", List.of(stationMap.get(3L), stationMap.get(2L), stationMap.get(1L))));
         routes.add(new Route(3L, "Riga-Daugavpils", List.of(stationMap.get(1L), stationMap.get(4L))));
         routes.add(new Route(4L, "Daugavpils-Riga", List.of(stationMap.get(4L), stationMap.get(1L))));
+        // Additional routes
+        routes.add(new Route(5L, "Riga-Valmiera", List.of(stationMap.get(1L), stationMap.get(5L))));
+        routes.add(new Route(6L, "Valmiera-Riga", List.of(stationMap.get(5L), stationMap.get(1L))));
+        routes.add(new Route(7L, "Daugavpils-Rezekne", List.of(stationMap.get(4L), stationMap.get(6L))));
+        routes.add(new Route(8L, "Rezekne-Daugavpils", List.of(stationMap.get(6L), stationMap.get(4L))));
         return routes;
     }
 
@@ -123,10 +132,12 @@ public class DemoDataGenerator {
 
     private static List<Depo> generateDepos(Map<Long, Station> stationMap, List<Train> trains) {
         List<Depo> depos = new ArrayList<>();
-        // One depot at each major station for simplicity
+        // One depot at each major station
         depos.add(new Depo(1L, stationMap.get(1L), trains.size())); // Riga
         depos.add(new Depo(2L, stationMap.get(3L), trains.size())); // Liepaja
         depos.add(new Depo(3L, stationMap.get(4L), trains.size())); // Daugavpils
+        depos.add(new Depo(4L, stationMap.get(5L), trains.size())); // Valmiera
+        depos.add(new Depo(5L, stationMap.get(6L), trains.size())); // Rezekne
         return depos;
     }
     
@@ -148,12 +159,55 @@ public class DemoDataGenerator {
     private static List<Trip> generateTrips(List<Route> routes) {
         List<Trip> trips = new ArrayList<>();
         long tripId = 1L;
-        // Create a set of trips for each route that need to be served
+        int servicesPerRoute = 6; // Multiple services per route throughout the day
+
+        // Create multiple services for each route
         for (Route route : routes) {
-            for (int i = 0; i < route.getStations().size(); i++) {
-                trips.add(new Trip(tripId++, route, i));
+            for (int service = 0; service < servicesPerRoute; service++) {
+                // Each service covers all stations in the route
+                for (int stationIdx = 0; stationIdx < route.getStations().size(); stationIdx++) {
+                    trips.add(new Trip(tripId++, route, stationIdx));
+                }
             }
         }
         return trips;
+    }
+
+    /**
+     * Prints a summary of the schedule to the console for debugging.
+     */
+    public static void printScheduleSummary(RollingStockSchedule schedule) {
+        LOGGER.info("========== SCHEDULE SUMMARY ==========");
+        LOGGER.info("Trains: {}", schedule.getTrains().size());
+        LOGGER.info("Stations: {}", schedule.getStations().size());
+        LOGGER.info("Routes: {}", schedule.getRoutes().size());
+        LOGGER.info("Depos: {}", schedule.getDepos().size());
+        LOGGER.info("Trips: {}", schedule.getTrips().size());
+        LOGGER.info("Available departure times: {}", schedule.getAvailableDepartureTimes().size());
+
+        LOGGER.info("--- Trains ---");
+        for (var train : schedule.getTrains()) {
+            String homeDepoStation = train.getHomeDepo() != null ? train.getHomeDepo().getStation().getName() : "None";
+            LOGGER.info("  Train {}: capacity={}, homeDepo={}", train.getId(), train.getCapacity(), homeDepoStation);
+        }
+
+        LOGGER.info("--- Routes ---");
+        for (var route : schedule.getRoutes()) {
+            List<String> stationNames = route.getStations().stream()
+                    .map(Station::getName)
+                    .toList();
+            LOGGER.info("  Route {}: {} -> {}", route.getId(), route.getName(), stationNames);
+        }
+
+        LOGGER.info("--- Trips by Route ---");
+        Map<Long, Long> tripsPerRoute = new HashMap<>();
+        for (var trip : schedule.getTrips()) {
+            tripsPerRoute.merge(trip.getRoute().getId(), 1L, Long::sum);
+        }
+        for (var entry : tripsPerRoute.entrySet()) {
+            LOGGER.info("  Route {}: {} trips", entry.getKey(), entry.getValue());
+        }
+
+        LOGGER.info("=======================================");
     }
 }

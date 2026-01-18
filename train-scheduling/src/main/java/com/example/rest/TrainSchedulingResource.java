@@ -131,6 +131,9 @@ public class TrainSchedulingResource {
         String jobId = UUID.randomUUID().toString();
         scheduleMap.put(jobId, schedule);
 
+        // Print schedule summary for debugging
+        DemoDataGenerator.printScheduleSummary(schedule);
+
         solverManager.solve(jobId, id -> scheduleMap.get(id),
                 solution -> scheduleMap.put(jobId, solution));
 
