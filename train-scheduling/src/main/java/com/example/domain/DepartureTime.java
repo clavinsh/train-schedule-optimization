@@ -21,7 +21,6 @@ import lombok.Setter;
 @Setter @Getter @AllArgsConstructor @NoArgsConstructor
 @PlanningEntity(difficultyComparatorClass = DepartureTime.DifficultyComparator.class)
 public class DepartureTime {
-
     /**
      * Difficulty comparator for construction heuristic.
      * Longer routes are harder to schedule, so they should be assigned first.

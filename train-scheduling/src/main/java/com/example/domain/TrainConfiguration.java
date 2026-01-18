@@ -22,7 +22,6 @@ public class TrainConfiguration {
     // Average train speed in km/h (used to calculate travel time between stations)
     private double averageSpeedKmPerHour;
 
-
     /**
      * Calculates the travel time between two stations based on distance and average speed.
      */

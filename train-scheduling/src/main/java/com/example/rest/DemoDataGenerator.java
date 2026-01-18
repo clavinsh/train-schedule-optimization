@@ -95,17 +95,18 @@ public class DemoDataGenerator {
         List<DepartureTime> departureTimes = generateDepartureTimes(routes, stationDemands,
                 startHour, endHour, intervalHours);
 
-        return new RollingStockSchedule(
-                trains,
-                stations,
-                routes,
-                depos,
-                trainDepoAssignments,
-                stationDemands,
-                configuration,
-                availableDepartureTimes,
-                departureTimes
-        );
+        RollingStockSchedule schedule = new RollingStockSchedule();
+        schedule.setTrains(trains);
+        schedule.setStations(stations);
+        schedule.setRoutes(routes);
+        schedule.setDepos(depos);
+        schedule.setTrainDepoAssignments(trainDepoAssignments);
+        schedule.setStationDemands(stationDemands);
+        schedule.setConfiguration(configuration);
+        schedule.setAvailableDepartureTimes(availableDepartureTimes);
+        schedule.setDepartureTimes(departureTimes);
+        // score is left null - Timefold will calculate it during solving
+        return schedule;
     }
 
     /**
@@ -495,7 +496,11 @@ public class DemoDataGenerator {
             // Generate one departure per time slot per route
             // This represents "we need a train to run this route at approximately this hour"
             for (int hour = startHour; hour <= endHour; hour += intervalHours) {
-                DepartureTime departure = new DepartureTime(id++, firstStation, route, 0);
+                DepartureTime departure = new DepartureTime();
+                departure.setId(id++);
+                departure.setStation(firstStation);
+                departure.setRoute(route);
+                departure.setStationIndexInRoute(0);
                 // Train and departure time are null - Timefold will assign them
                 departureTimes.add(departure);
             }
