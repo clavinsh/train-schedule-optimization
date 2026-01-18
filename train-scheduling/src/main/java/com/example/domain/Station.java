@@ -1,9 +1,9 @@
 package com.example.domain;
 
-import java.util.List;
+import java.time.Duration;
+import java.util.Map;
 import java.util.Objects;
 import com.example.domain.helpers.CoordinateCalc;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import ai.timefold.solver.core.api.domain.lookup.PlanningId;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -22,8 +22,13 @@ public class Station implements Comparable<Station> {
     private double latitude;
     private double longitude;
 
-    @JsonIgnore // Prevent circular reference during JSON serialization
-    private List<Station> neighbors;
+    // Holds passenger demand for this station, mapped by hour (0-23).
+    // e.g., { 8: 150, 9: 200 }
+    private Map<Integer, Integer> embarkingDemand;
+    private Map<Integer, Integer> disembarkingDemand;
+
+    // Holds the actual travel time to neighboring stations, keyed by station ID.
+    private Map<Long, Duration> travelTimesToNeighbors;
 
 
     @Override

@@ -1,21 +1,33 @@
 package com.example.domain;
 
+import java.time.LocalTime;
 import java.util.Objects;
-import ai.timefold.solver.core.api.domain.lookup.PlanningId;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Represents a train with a maximum passenger capacity
+ * Represents a train with a maximum passenger capacity.
+ * Acts as an anchor for the chained Trip variable.
  */
 @Setter @Getter @AllArgsConstructor @NoArgsConstructor
-public class Train {
-    @PlanningId
+public class Train implements Standstill {
     private Long id;
     private int capacity;
-    
+    private Depo homeDepo;
+    private LocalTime departureTime;
+
+    @JsonIgnore
+    private Trip nextTrip;
+
+    @Override
+    public Station getStation() {
+        return homeDepo != null ? homeDepo.getStation() : null;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o)
@@ -28,6 +40,6 @@ public class Train {
 
     @Override
     public int hashCode() {
-        return id.hashCode();
+        return Objects.hash(id);
     }
 }

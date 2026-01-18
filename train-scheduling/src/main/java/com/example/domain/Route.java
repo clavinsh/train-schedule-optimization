@@ -9,7 +9,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Represents a specific train route covering some ordererd list of stations
+ * Represents a specific train route covering some ordered list of stations.
+ * This is a template of stations, not a specific trip instance.
  */
 @Setter @Getter @AllArgsConstructor @NoArgsConstructor
 public class Route implements Comparable<Route> {
@@ -19,8 +20,8 @@ public class Route implements Comparable<Route> {
     private List<Station> stations;
 
     @Override
-    public int compareTo(Route arg0) {
-        return id.compareTo(arg0.id);
+    public int compareTo(Route other) {
+        return id.compareTo(other.id);
     }
 
     @Override

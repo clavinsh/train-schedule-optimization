@@ -1,6 +1,7 @@
 package com.example.domain;
 
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import ai.timefold.solver.core.api.domain.solution.PlanningEntityCollectionProperty;
 import ai.timefold.solver.core.api.domain.solution.PlanningScore;
@@ -24,8 +25,7 @@ import lombok.Setter;
 @Setter @Getter @AllArgsConstructor @NoArgsConstructor
 @PlanningSolution
 public class RollingStockSchedule {
-    // Problem facts - input data that doesn't change during solving
-    @ProblemFactCollectionProperty
+    
     @ValueRangeProvider(id = "trainRange")
     private List<Train> trains;
 
@@ -38,29 +38,29 @@ public class RollingStockSchedule {
     @ProblemFactCollectionProperty
     private List<Depo> depos;
 
-    @ProblemFactCollectionProperty
-    private List<TrainDepoAssignment> trainDepoAssignments;
-
-    @ProblemFactCollectionProperty
-    private List<StationDemand> stationDemands;
-
     @ProblemFactProperty
     private TrainConfiguration configuration;
 
-    // Value range for departure times (generated list of possible times)
     @ValueRangeProvider(id = "timeRange")
     @ProblemFactCollectionProperty
     private List<LocalTime> availableDepartureTimes;
 
-    // Planning entities - what Timefold optimizes
     @PlanningEntityCollectionProperty
-    private List<DepartureTime> departureTimes;
+    @ValueRangeProvider(id = "tripRange")
+    private List<Trip> trips;
 
-    // The score calculated by the constraint provider
     @PlanningScore
     private HardSoftScore score;
 
-    // Transient field for JSON serialization only (not part of planning, computed on-demand)
+    // Additional getter for standstillRange
+    @JsonIgnore
+    @ValueRangeProvider(id = "standstillRange")
+    public List<Standstill> getStandstillRange() {
+        List<Standstill> standstillRange = new ArrayList<>(trains);
+        standstillRange.addAll(trips);
+        return standstillRange;
+    }
+
     @JsonIgnore
     private transient SolverStatus solverStatus;
 

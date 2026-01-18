@@ -2,7 +2,7 @@
 <solver xmlns="https://timefold.ai/xsd/solver" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="https://timefold.ai/xsd/solver https://timefold.ai/xsd/solver/solver.xsd">
     <solutionClass>com.example.domain.RollingStockSchedule</solutionClass>
-    <entityClass>com.example.domain.DepartureTime</entityClass>
+    <entityClass>com.example.domain.Trip</entityClass>
     <scoreDirectorFactory>
         <constraintProviderClass>com.example.solver.TrainScheduleConstraintProvider</constraintProviderClass>
     </scoreDirectorFactory>
@@ -15,7 +15,7 @@
 
     <!-- Construction Heuristic: build initial solution quickly -->
     <constructionHeuristic>
-        <constructionHeuristicType>FIRST_FIT_DECREASING</constructionHeuristicType>
+        <constructionHeuristicType>FIRST_FIT</constructionHeuristicType>
     </constructionHeuristic>
 
     <!-- Local Search: use Late Acceptance with change and swap moves -->

@@ -34,6 +34,9 @@ public class Depo {
 
     @Override
     public String toString() {
+        if (station == null) {
+            return "Depo";
+        }
         return station.getName() + " - Depo";
     }
 }
