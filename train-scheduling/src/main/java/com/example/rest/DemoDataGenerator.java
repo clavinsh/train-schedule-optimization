@@ -37,6 +37,87 @@ public class DemoDataGenerator {
     }
 
     /**
+     * Prints sample instances from each domain class in the schedule
+     */
+    public static void printGeneratedData(RollingStockSchedule schedule) {
+        int sampleSize = 3;
+
+        System.out.println("=== GENERATED DEMO DATA ===\n");
+
+        // Configuration
+        TrainConfiguration config = schedule.getConfiguration();
+        System.out.println("--- TrainConfiguration ---");
+        System.out.println("  Min interval between trains: " + config.getMinIntervalBetweenTrains());
+        System.out.println("  Station stop duration: " + config.getStationStopDuration());
+        System.out.println("  Average speed: " + config.getAverageSpeedKmPerHour() + " km/h");
+        System.out.println();
+
+        // Trains
+        System.out.println("--- Trains (showing " + sampleSize + " of " + schedule.getTrains().size() + ") ---");
+        schedule.getTrains().stream().limit(sampleSize).forEach(t ->
+                System.out.println("  Train #" + t.getId() + " - capacity: " + t.getCapacity()));
+        System.out.println();
+
+        // Stations
+        System.out.println("--- Stations (showing " + sampleSize + " of " + schedule.getStations().size() + ") ---");
+        schedule.getStations().stream().limit(sampleSize).forEach(s ->
+                System.out.println("  Station #" + s.getId() + " - " + s.getName() +
+                        " (" + s.getLatitude() + ", " + s.getLongitude() + ")"));
+        System.out.println();
+
+        // Routes
+        System.out.println("--- Routes (showing " + sampleSize + " of " + schedule.getRoutes().size() + ") ---");
+        schedule.getRoutes().stream().limit(sampleSize).forEach(r ->
+                System.out.println("  Route #" + r.getId() + " - " + r.getName() +
+                        " (" + r.getStations().size() + " stations)"));
+        System.out.println();
+
+        // Depos
+        System.out.println("--- Depos (showing " + sampleSize + " of " + schedule.getDepos().size() + ") ---");
+        schedule.getDepos().stream().limit(sampleSize).forEach(d ->
+                System.out.println("  Depo #" + d.getId() + " at " + d.getStation().getName() +
+                        " - capacity: " + d.getCapacity()));
+        System.out.println();
+
+        // TrainDepoAssignments
+        System.out.println("--- TrainDepoAssignments (showing " + sampleSize + " of " +
+                schedule.getTrainDepoAssignments().size() + ") ---");
+        schedule.getTrainDepoAssignments().stream().limit(sampleSize).forEach(a ->
+                System.out.println("  Assignment #" + a.getId() + " - Train #" + a.getTrain().getId() +
+                        " -> " + a.getDepo()));
+        System.out.println();
+
+        // StationDemands
+        System.out.println("--- StationDemands (showing " + sampleSize + " of " +
+                schedule.getStationDemands().size() + ") ---");
+        schedule.getStationDemands().stream().limit(sampleSize).forEach(sd ->
+                System.out.println("  Demand #" + sd.getId() + " - " + sd.getStation().getName() +
+                        " on " + sd.getRoute().getName() + " at " + sd.getTime() +
+                        " (embarking: " + sd.getEmbarkingPassengers() +
+                        ", disembarking: " + sd.getDisembarkingPassengers() + ")"));
+        System.out.println();
+
+        // DepartureTimes
+        System.out.println("--- DepartureTimes (showing " + sampleSize + " of " +
+                schedule.getDepartureTimes().size() + ") ---");
+        schedule.getDepartureTimes().stream().limit(sampleSize).forEach(dt ->
+                System.out.println("  DepartureTime #" + dt.getId() + " - " + dt.getStation().getName() +
+                        " on " + dt.getRoute().getName() +
+                        " (train: " + (dt.getTrain() != null ? dt.getTrain().getId() : "unassigned") +
+                        ", time: " + (dt.getDepartureTime() != null ? dt.getDepartureTime() : "unassigned") + ")"));
+        System.out.println();
+
+        // Available departure times
+        System.out.println("--- Available Departure Times (showing " + sampleSize + " of " +
+                schedule.getAvailableDepartureTimes().size() + ") ---");
+        schedule.getAvailableDepartureTimes().stream().limit(sampleSize).forEach(t ->
+                System.out.println("  " + t));
+        System.out.println();
+
+        System.out.println("=== END OF DEMO DATA ===");
+    }
+
+    /**
      * Generates default size dataset
      */
     public static RollingStockSchedule generateDefaultDataset() {
@@ -490,8 +571,18 @@ public class DemoDataGenerator {
         List<DepartureTime> departureTimes = new ArrayList<>();
         long id = 1L;
 
+        // Build lookup: (stationId, routeId) -> (hour -> StationDemand)
+        Map<String, Map<Integer, StationDemand>> demandLookup = new HashMap<>();
+        for (StationDemand demand : stationDemands) {
+            String key = demand.getStation().getId() + "-" + demand.getRoute().getId();
+            demandLookup.computeIfAbsent(key, k -> new HashMap<>())
+                    .put(demand.getTime().getHour(), demand);
+        }
+
         for (Route route : routes) {
             Station firstStation = route.getStations().get(0);
+            String lookupKey = firstStation.getId() + "-" + route.getId();
+            Map<Integer, StationDemand> hourlyDemands = demandLookup.getOrDefault(lookupKey, new HashMap<>());
 
             // Generate one departure per time slot per route
             // This represents "we need a train to run this route at approximately this hour"
@@ -501,6 +592,7 @@ public class DemoDataGenerator {
                 departure.setStation(firstStation);
                 departure.setRoute(route);
                 departure.setStationIndexInRoute(0);
+                departure.setHourlyDemands(hourlyDemands);
                 // Train and departure time are null - Timefold will assign them
                 departureTimes.add(departure);
             }

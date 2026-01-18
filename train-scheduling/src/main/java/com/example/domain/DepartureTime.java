@@ -2,10 +2,13 @@ package com.example.domain;
 
 import java.time.LocalTime;
 import java.util.Comparator;
+import java.util.Map;
 import java.util.Objects;
 import ai.timefold.solver.core.api.domain.entity.PlanningEntity;
 import ai.timefold.solver.core.api.domain.lookup.PlanningId;
 import ai.timefold.solver.core.api.domain.variable.PlanningVariable;
+import ai.timefold.solver.core.api.domain.variable.ShadowVariable;
+import ai.timefold.solver.core.api.domain.variable.ShadowSources;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -19,7 +22,7 @@ import lombok.Setter;
  * Maps to "Atiešanas laiks" from the domain model.
  */
 @Setter @Getter @AllArgsConstructor @NoArgsConstructor
-@PlanningEntity(difficultyComparatorClass = DepartureTime.DifficultyComparator.class)
+@PlanningEntity(comparatorClass = DepartureTime.DifficultyComparator.class)
 public class DepartureTime {
     /**
      * Difficulty comparator for construction heuristic.
@@ -43,6 +46,9 @@ public class DepartureTime {
     private Route route;
     private int stationIndexInRoute; // Position of this station in the route
 
+    // Lookup map for station demands by hour (populated during data generation)
+    private Map<Integer, StationDemand> hourlyDemands;
+
     // Planning variables - Timefold will optimize these
     @PlanningVariable(valueRangeProviderRefs = "trainRange")
     private Train train;
@@ -50,8 +56,9 @@ public class DepartureTime {
     @PlanningVariable(valueRangeProviderRefs = "timeRange")
     private LocalTime departureTime;
 
-    // Calculated during solving - tracks passenger changes at this stop
-    private int passengerDelta;
+    // Shadow variable - automatically calculated from departureTime
+    @ShadowVariable(supplierName = "calculatePassengerDelta")
+    private Integer passengerDelta;
 
     /**
      * Checks if this departure is the first station on the route
@@ -85,6 +92,22 @@ public class DepartureTime {
             return null;
         }
         return route.getStations().get(stationIndexInRoute - 1);
+    }
+
+    /**
+     * Supplier method for the passengerDelta shadow variable.
+     * Calculates net passenger change (embarking - disembarking) at this stop.
+     */
+    @ShadowSources("departureTime")
+    public Integer calculatePassengerDelta() {
+        if (departureTime == null || hourlyDemands == null) {
+            return 0;
+        }
+        StationDemand demand = hourlyDemands.get(departureTime.getHour());
+        if (demand == null) {
+            return 0;
+        }
+        return demand.getEmbarkingPassengers(departureTime) - demand.getDisembarkingPassengers(departureTime);
     }
 
     @Override
