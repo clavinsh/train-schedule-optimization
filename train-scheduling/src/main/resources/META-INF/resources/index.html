@@ -120,6 +120,95 @@
                 margin-bottom: 0.5rem;
             }
         }
+
+        /* Trip Details Modal Styles */
+        .trip-info-section {
+            margin-bottom: 1rem;
+        }
+        .trip-info-label {
+            color: #adb5bd;
+            font-size: 0.85rem;
+            margin-bottom: 0.25rem;
+        }
+        .trip-info-value {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        .station-timeline {
+            position: relative;
+            padding-left: 20px;
+        }
+        .station-timeline::before {
+            content: '';
+            position: absolute;
+            left: 8px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, #28a745, #ffc107, #dc3545);
+        }
+        .station-stop {
+            position: relative;
+            padding: 0.5rem 0 0.5rem 1.5rem;
+            border-bottom: 1px solid #343a40;
+        }
+        .station-stop:last-child {
+            border-bottom: none;
+        }
+        .station-stop::before {
+            content: '';
+            position: absolute;
+            left: -16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #6c757d;
+            border: 2px solid #495057;
+        }
+        .station-stop.first::before {
+            background: #28a745;
+        }
+        .station-stop.last::before {
+            background: #dc3545;
+        }
+        .station-time {
+            color: #ffc107;
+            font-weight: 600;
+            min-width: 50px;
+            display: inline-block;
+        }
+        .station-name {
+            color: #f8f9fa;
+        }
+        .train-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            display: inline-block;
+        }
+
+        /* Hover effect for timeline items */
+        .vis-item:hover {
+            cursor: pointer;
+            transform: scale(1.02);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            z-index: 100;
+        }
+
+        /* Dropdown menu styling */
+        .dropdown-menu-dark .dropdown-item.active {
+            background-color: var(--ts-violet-1-rgb);
+        }
+
+        /* Benchmark modal styling */
+        #benchmarkModal .progress {
+            background-color: #343a40;
+        }
+        #benchmarkModal .table-dark {
+            --bs-table-bg: #212529;
+        }
     </style>
 </head>
 
@@ -218,6 +307,33 @@
                     <span class="fas fa-upload"></span> Import JSON
                 </button>
                 <input type="file" id="importFileInput" accept=".json" style="display: none;">
+                
+                <!-- Algorithm Selection Dropdown -->
+                <div class="dropdown me-2">
+                    <button class="btn btn-outline-info dropdown-toggle" type="button" id="algorithmDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="fas fa-cog"></span> Algoritms
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="algorithmDropdown">
+                        <li><a class="dropdown-item algorithm-option active" href="#" data-algorithm="default">Default (Hill Climbing)</a></li>
+                        <li><a class="dropdown-item algorithm-option" href="#" data-algorithm="tabu">Tabu Search</a></li>
+                        <li><a class="dropdown-item algorithm-option" href="#" data-algorithm="late-acceptance">Late Acceptance</a></li>
+                        <li><a class="dropdown-item algorithm-option" href="#" data-algorithm="simulated-annealing">Simulated Annealing</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#" id="runBenchmark"><i class="fas fa-chart-line me-1"></i> Run Benchmark</a></li>
+                    </ul>
+                </div>
+                
+                <!-- Dataset Size Dropdown -->
+                <div class="dropdown me-2">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="datasetDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="fas fa-database"></span> Datu kopa
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="datasetDropdown">
+                        <li><a class="dropdown-item dataset-option" href="#" data-size="small">Maza (4 vilcieni, 10 maršruti)</a></li>
+                        <li><a class="dropdown-item dataset-option active" href="#" data-size="default">Vidēja (4 vilcieni, 20 maršruti)</a></li>
+                        <li><a class="dropdown-item dataset-option" href="#" data-size="large">Liela (8 vilcieni, 20 maršruti)</a></li>
+                    </ul>
+                </div>
 
                 <div class="ms-auto">
                     <ul class="nav nav-pills" role="tablist">
@@ -342,6 +458,74 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trip Details Modal -->
+    <div class="modal fade" id="tripDetailsModal" tabindex="-1" aria-labelledby="tripDetailsModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark text-white">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title" id="tripDetailsModalLabel">
+                        <i class="fas fa-route me-2"></i>Brauciena Detaļas
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="tripDetailsModalContent">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Benchmark Results Modal -->
+    <div class="modal fade" id="benchmarkModal" tabindex="-1" aria-labelledby="benchmarkModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content bg-dark text-white">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title" id="benchmarkModalLabel">
+                        <i class="fas fa-chart-line me-2"></i>Benchmark Rezultāti
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="benchmarkModalContent">
+                    <div class="text-center py-4" id="benchmarkLoading">
+                        <i class="fas fa-spinner fa-spin fa-3x mb-3"></i>
+                        <p>Veic benchmark testus... <span id="benchmarkProgress">0/4</span></p>
+                        <div class="progress" style="height: 20px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" id="benchmarkProgressBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div id="benchmarkResults" style="display: none;">
+                        <h6><i class="fas fa-info-circle me-1"></i> Problēmas apraksts</h6>
+                        <div class="alert alert-info mb-3" id="problemDescription"></div>
+                        
+                        <h6><i class="fas fa-table me-1"></i> Algoritmu salīdzinājums</h6>
+                        <table class="table table-dark table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Algoritms</th>
+                                    <th class="text-center">Hard Score</th>
+                                    <th class="text-center">Soft Score</th>
+                                    <th class="text-center">Laiks (s)</th>
+                                    <th class="text-center">Iterācijas</th>
+                                </tr>
+                            </thead>
+                            <tbody id="benchmarkTableBody">
+                            </tbody>
+                        </table>
+                        
+                        <h6 class="mt-4"><i class="fas fa-lightbulb me-1"></i> Secinājumi</h6>
+                        <div class="alert alert-success" id="benchmarkConclusion"></div>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Aizvērt</button>
+                    <button type="button" class="btn btn-primary" id="exportBenchmarkBtn">
+                        <i class="fas fa-download me-1"></i> Eksportēt rezultātus
+                    </button>
                 </div>
             </div>
         </div>

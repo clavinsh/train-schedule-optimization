@@ -43,6 +43,7 @@ public class TrainScheduleConstraintProvider implements ConstraintProvider {
                 trainStartsAtDepo(constraintFactory),
                 minIntervalBetweenTrains(constraintFactory),
                 trainRouteConsistency(constraintFactory),
+                trainContinuity(constraintFactory),
 
                 // Soft constraints: These constraints represent preferences; violating them reduces
                 // the quality of the solution but does not make it infeasible. The solver tries
@@ -207,13 +208,7 @@ public class TrainScheduleConstraintProvider implements ConstraintProvider {
      * has sufficient time to complete its current route before starting another assigned route.
      * <p>
      * **Implementation Detail:**
-     * 1. It uses `forEachUniquePair` to compare every unique pair of {@link DepartureTime} instances
-     *    assigned to the same {@link Train}.
-     * 2. It filters for pairs where both departures have assigned trains and times.
-     * 3. For each trip, it estimates its duration by multiplying the number of stations in the route
-     *    by a fixed duration (3 minutes per station). This is a simplified estimation.
-     * 4. It then checks for any overlap between the estimated start and end times of the two trips.
-     * 5. A conflict is identified if neither trip is completed entirely before the other begins.
+     * Uses minutes from midnight for correct time arithmetic (handles potential midnight crossing).
      * </p>
      * **Scoring:** Penalizes {@code 1 Hard} for each pair of overlapping trips for the same train.
      *
@@ -224,28 +219,99 @@ public class TrainScheduleConstraintProvider implements ConstraintProvider {
         return constraintFactory.forEachUniquePair(DepartureTime.class,
                         Joiners.equal(DepartureTime::getTrain)) // Match pairs of departures assigned to the same train
                 .filter((d1, d2) -> d1.getTrain() != null
-                        && d1.getDepartureTime() != null && d2.getDepartureTime() != null)
+                        && d1.getDepartureTime() != null && d2.getDepartureTime() != null
+                        && d1.getRoute() != null && d2.getRoute() != null)
                 .filter((d1, d2) -> {
-                    // Estimate trip duration: A simplified estimation of 3 minutes per station.
-                    // This could be replaced with a more accurate lookup based on actual route data.
-                    int d1Stations = d1.getRoute().getStations().size();
-                    int d2Stations = d2.getRoute().getStations().size();
+                    // Convert to minutes from midnight for correct arithmetic
+                    int d1StartMinutes = d1.getDepartureTime().getHour() * 60 + d1.getDepartureTime().getMinute();
+                    int d2StartMinutes = d2.getDepartureTime().getHour() * 60 + d2.getDepartureTime().getMinute();
+                    
+                    // Estimate trip duration: 3 minutes per station
+                    int d1Duration = d1.getRoute().getStations().size() * 3;
+                    int d2Duration = d2.getRoute().getStations().size() * 3;
+                    
+                    int d1EndMinutes = d1StartMinutes + d1Duration;
+                    int d2EndMinutes = d2StartMinutes + d2Duration;
 
-                    LocalTime d1Start = d1.getDepartureTime();
-                    LocalTime d1End = d1Start.plusMinutes(d1Stations * 3L); // Estimated end time for trip 1
-                    LocalTime d2Start = d2.getDepartureTime();
-                    LocalTime d2End = d2Start.plusMinutes(d2Stations * 3L); // Estimated end time for trip 2
-
-                    // Check for overlap: Two trips overlap if one starts before the other ends,
-                    // and vice versa. No overlap if one trip entirely precedes the other.
-                    boolean d1BeforeD2 = !d1End.isAfter(d2Start); // True if d1 ends before or at d2 starts
-                    boolean d2BeforeD1 = !d2End.isAfter(d1Start); // True if d2 ends before or at d1 starts
+                    // Check for overlap: Two trips overlap if one starts before the other ends
+                    boolean d1BeforeD2 = d1EndMinutes <= d2StartMinutes;
+                    boolean d2BeforeD1 = d2EndMinutes <= d1StartMinutes;
 
                     // Conflict if neither trip is entirely before the other (i.e., they overlap)
                     return !d1BeforeD2 && !d2BeforeD1;
                 })
                 .penalize(HardSoftScore.ONE_HARD)
                 .asConstraint("Train route consistency");
+    }
+
+    /**
+     * **Hard Constraint:** A {@link Train} must be able to physically travel between CONSECUTIVE trips.
+     * The last station of the previous trip must equal the first station of the next trip.
+     * <p>
+     * **Implementation Detail:**
+     * Checks only consecutive trips (where there's no other trip in between for the same train).
+     * </p>
+     * **Scoring:** Penalizes {@code 1 Hard} for each pair of consecutive trips where the train
+     * cannot physically travel from the end of one to the start of the next.
+     *
+     * @param constraintFactory The {@link ConstraintFactory} to build the constraint.
+     * @return A {@link Constraint} ensuring trains can physically travel between consecutive trips.
+     */
+    protected Constraint trainContinuity(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEachUniquePair(DepartureTime.class,
+                        Joiners.equal(DepartureTime::getTrain))
+                .filter((d1, d2) -> d1.getTrain() != null
+                        && d1.getDepartureTime() != null && d2.getDepartureTime() != null
+                        && d1.getRoute() != null && d2.getRoute() != null)
+                // Only check consecutive trips - no trip in between
+                .ifNotExists(DepartureTime.class,
+                        Joiners.equal((d1, d2) -> d1.getTrain(), DepartureTime::getTrain),
+                        Joiners.filtering((d1, d2, middle) -> {
+                            if (middle.getDepartureTime() == null) return false;
+                            if (middle.equals(d1) || middle.equals(d2)) return false;
+                            
+                            int d1Minutes = d1.getDepartureTime().getHour() * 60 + d1.getDepartureTime().getMinute();
+                            int d2Minutes = d2.getDepartureTime().getHour() * 60 + d2.getDepartureTime().getMinute();
+                            int middleMinutes = middle.getDepartureTime().getHour() * 60 + middle.getDepartureTime().getMinute();
+                            
+                            int earlier = Math.min(d1Minutes, d2Minutes);
+                            int later = Math.max(d1Minutes, d2Minutes);
+                            
+                            // Check if middle trip is strictly between the two
+                            return middleMinutes > earlier && middleMinutes < later;
+                        }))
+                .filter((d1, d2) -> {
+                    // Convert to minutes from midnight
+                    int d1StartMinutes = d1.getDepartureTime().getHour() * 60 + d1.getDepartureTime().getMinute();
+                    int d2StartMinutes = d2.getDepartureTime().getHour() * 60 + d2.getDepartureTime().getMinute();
+                    
+                    // Determine which trip comes first chronologically
+                    DepartureTime first = d1StartMinutes <= d2StartMinutes ? d1 : d2;
+                    DepartureTime second = d1StartMinutes <= d2StartMinutes ? d2 : d1;
+                    int firstStartMinutes = Math.min(d1StartMinutes, d2StartMinutes);
+                    int secondStartMinutes = Math.max(d1StartMinutes, d2StartMinutes);
+
+                    // Calculate end time of first trip in minutes (3 min per station)
+                    int firstDuration = first.getRoute().getStations().size() * 3;
+                    int firstEndMinutes = firstStartMinutes + firstDuration;
+
+                    // If trips overlap in time, that's handled by trainRouteConsistency constraint
+                    if (firstEndMinutes > secondStartMinutes) {
+                        return false; // Skip - overlap is caught elsewhere
+                    }
+
+                    // Get last station of first trip and first station of second trip
+                    List<Station> firstRouteStations = first.getRoute().getStations();
+                    Station lastStationOfFirst = firstRouteStations.get(firstRouteStations.size() - 1);
+                    
+                    List<Station> secondRouteStations = second.getRoute().getStations();
+                    Station firstStationOfSecond = secondRouteStations.get(0);
+
+                    // Penalize if train cannot physically transition (not at same station)
+                    return !lastStationOfFirst.equals(firstStationOfSecond);
+                })
+                .penalize(HardSoftScore.ONE_HARD)
+                .asConstraint("Train continuity - must be at correct station");
     }
 
     /**

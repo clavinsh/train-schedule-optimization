@@ -4,6 +4,9 @@ let autoRefreshIntervalId = null;
 let scheduleId = null;
 let loadedSchedule = null;
 let viewType = "train";
+let selectedAlgorithm = "default";
+let selectedDatasetSize = "default";
+let benchmarkResults = [];
 
 // Timeline configurations
 const timelineOptions = {
@@ -50,6 +53,22 @@ function initializeTimelines() {
     routeGroupData = new vis.DataSet();
     routeItemData = new vis.DataSet();
     routeTimeline = new vis.Timeline(routeTimelinePanel, routeItemData, routeGroupData, timelineOptions);
+
+    // Add click handlers for both timelines (click only, no hover modal)
+    trainTimeline.on('select', function(properties) {
+        if (properties.items && properties.items.length > 0) {
+            const itemId = properties.items[0];
+            showTripDetails(itemId);
+        }
+    });
+
+    routeTimeline.on('select', function(properties) {
+        if (properties.items && properties.items.length > 0) {
+            const itemId = properties.items[0];
+            const departureId = itemId.toString().replace('route-', '');
+            showTripDetails(parseInt(departureId));
+        }
+    });
 }
 
 function setupEventHandlers() {
@@ -59,6 +78,33 @@ function setupEventHandlers() {
     $("#exportButton").click(exportScheduleJson);
     $("#importButton").click(() => $("#importFileInput").click());
     $("#importFileInput").change(importScheduleJson);
+
+    // Algorithm selection
+    $(".algorithm-option").click(function(e) {
+        e.preventDefault();
+        $(".algorithm-option").removeClass("active");
+        $(this).addClass("active");
+        selectedAlgorithm = $(this).data("algorithm");
+        showSuccess("Algoritms izvēlēts", `Izvēlēts: ${$(this).text()}`);
+    });
+
+    // Dataset size selection
+    $(".dataset-option").click(function(e) {
+        e.preventDefault();
+        $(".dataset-option").removeClass("active");
+        $(this).addClass("active");
+        selectedDatasetSize = $(this).data("size");
+        loadDataset(selectedDatasetSize);
+    });
+
+    // Benchmark button
+    $("#runBenchmark").click(function(e) {
+        e.preventDefault();
+        runBenchmark();
+    });
+
+    // Export benchmark results
+    $("#exportBenchmarkBtn").click(exportBenchmarkResults);
 
     $("#byTrainTab").click(function () {
         viewType = "train";
@@ -617,4 +663,360 @@ function importScheduleJson(event) {
 
     // Reset file input so same file can be re-imported
     event.target.value = '';
+}
+/**
+ * Show trip details in a modal when clicking on a timeline item
+ */
+function showTripDetails(departureId) {
+    if (!loadedSchedule || !loadedSchedule.departureTimes) return;
+
+    const departure = loadedSchedule.departureTimes.find(d => d.id === departureId);
+    if (!departure) return;
+
+    const route = departure.route;
+    const train = departure.train;
+    const stations = route && route.stations ? route.stations : [];
+
+    // Calculate trip duration and station times
+    const stationCount = stations.length;
+    const tripDurationMinutes = stationCount * 3; // 3 min per station
+
+    // Get first and last station
+    const firstStation = stations.length > 0 ? stations[0].name : 'Unknown';
+    const lastStation = stations.length > 0 ? stations[stations.length - 1].name : 'Unknown';
+
+    // Calculate arrival time
+    let departureTimeStr = departure.departureTime || 'Nepiešķirts';
+    let arrivalTimeStr = 'N/A';
+    
+    if (departure.departureTime) {
+        const timeParts = departure.departureTime.split(':');
+        const hours = parseInt(timeParts[0], 10);
+        const minutes = parseInt(timeParts[1] || '0', 10);
+        const arrivalMinutes = hours * 60 + minutes + tripDurationMinutes;
+        const arrivalHours = Math.floor(arrivalMinutes / 60) % 24;
+        const arrivalMins = arrivalMinutes % 60;
+        arrivalTimeStr = `${arrivalHours.toString().padStart(2, '0')}:${arrivalMins.toString().padStart(2, '0')}`;
+    }
+
+    // Build station timeline HTML
+    let stationsHtml = '';
+    if (stations.length > 0 && departure.departureTime) {
+        const timeParts = departure.departureTime.split(':');
+        let currentMinutes = parseInt(timeParts[0], 10) * 60 + parseInt(timeParts[1] || '0', 10);
+
+        stations.forEach((station, idx) => {
+            const stationHours = Math.floor(currentMinutes / 60) % 24;
+            const stationMins = currentMinutes % 60;
+            const timeStr = `${stationHours.toString().padStart(2, '0')}:${stationMins.toString().padStart(2, '0')}`;
+            
+            let stationClass = '';
+            let marker = '';
+            if (idx === 0) {
+                stationClass = 'first';
+                marker = '<i class="fas fa-play-circle text-success me-2"></i>';
+            } else if (idx === stations.length - 1) {
+                stationClass = 'last';
+                marker = '<i class="fas fa-flag-checkered text-danger me-2"></i>';
+            }
+
+            stationsHtml += `
+                <div class="station-stop ${stationClass}">
+                    <span class="station-time">${timeStr}</span>
+                    <span class="station-name">${marker}${station.name}</span>
+                </div>
+            `;
+            currentMinutes += 3; // 3 min to next station
+        });
+    } else {
+        stationsHtml = '<p class="text-muted">Nav pieejama informācija par pieturām</p>';
+    }
+
+    // Calculate estimated passengers - only from first station at departure hour
+    let estimatedPassengers = 0;
+    if (loadedSchedule.stationDemands && departure.departureTime && stations.length > 0) {
+        const departureHour = parseInt(departure.departureTime.split(':')[0], 10);
+        const firstStationId = stations[0].id;
+        const demand = loadedSchedule.stationDemands.find(d => 
+            d.station && d.station.id === firstStationId && 
+            d.route && d.route.id === route.id && 
+            d.time && parseInt(d.time.split(':')[0], 10) === departureHour
+        );
+        estimatedPassengers = demand ? demand.embarkingPassengers : 0;
+    }
+
+    const modalContent = `
+        <div class="row">
+            <div class="col-md-5">
+                <div class="trip-info-section">
+                    <div class="trip-info-label"><i class="fas fa-route me-1"></i> Maršruts</div>
+                    <div class="trip-info-value">${route ? route.name : 'Unknown'}</div>
+                    <small class="text-muted">${firstStation} → ${lastStation}</small>
+                </div>
+
+                <div class="trip-info-section">
+                    <div class="trip-info-label"><i class="fas fa-clock me-1"></i> Laiks</div>
+                    <div class="trip-info-value">${departureTimeStr} - ${arrivalTimeStr}</div>
+                </div>
+
+                <div class="trip-info-section">
+                    <div class="trip-info-label"><i class="fas fa-train me-1"></i> Vilciens</div>
+                    ${train ? `
+                        <div class="train-badge">
+                            <strong>V${train.id}</strong>
+                            <span class="ms-2">Kapacitāte: ${train.capacity}</span>
+                        </div>
+                    ` : '<span class="badge bg-danger">Nav piešķirts</span>'}
+                </div>
+
+                <div class="trip-info-section">
+                    <div class="trip-info-label"><i class="fas fa-users me-1"></i> Pasažieri</div>
+                    <div class="trip-info-value">${estimatedPassengers > 0 ? estimatedPassengers : '~'} gaidāmie pasažieri</div>
+                </div>
+            </div>
+
+            <div class="col-md-7">
+                <div class="trip-info-label"><i class="fas fa-map-marker-alt me-1"></i> Pieturas</div>
+                <div class="station-timeline mt-2">
+                    ${stationsHtml}
+                </div>
+            </div>
+        </div>
+    `;
+
+    $('#tripDetailsModalContent').html(modalContent);
+    const modal = new bootstrap.Modal(document.getElementById('tripDetailsModal'));
+    modal.show();
+}
+
+/**
+ * Load dataset of specified size
+ */
+function loadDataset(size) {
+    let path = "/demo-data";
+    if (size === "small") {
+        path = "/demo-data?size=small";
+    } else if (size === "large") {
+        path = "/demo-data?size=large";
+    }
+
+    $.getJSON(path, function (schedule) {
+        scheduleId = null;
+        loadedSchedule = schedule;
+        renderSchedule(schedule);
+        showSuccess("Datu kopa ielādēta", `Vilcieni: ${schedule.trains.length}, Maršruti: ${schedule.routes.length}, Braucieni: ${schedule.departureTimes.length}`);
+    }).fail(function (xhr) {
+        showError("Neizdevās ielādēt datu kopu", xhr);
+    });
+}
+
+/**
+ * Run benchmark comparing different algorithms
+ */
+async function runBenchmark() {
+    const modal = new bootstrap.Modal(document.getElementById('benchmarkModal'));
+    modal.show();
+
+    // Reset UI
+    $('#benchmarkLoading').show();
+    $('#benchmarkResults').hide();
+    $('#benchmarkProgressBar').css('width', '0%');
+    benchmarkResults = [];
+
+    const algorithms = [
+        { id: 'default', name: 'Hill Climbing (Default)' },
+        { id: 'tabu', name: 'Tabu Search' },
+        { id: 'late-acceptance', name: 'Late Acceptance' },
+        { id: 'simulated-annealing', name: 'Simulated Annealing' }
+    ];
+
+    // Problem description
+    const problemDesc = `
+        <strong>Problēma:</strong> Vilcienu grafika optimizācija<br>
+        <strong>Vilcieni:</strong> ${loadedSchedule.trains.length}<br>
+        <strong>Maršruti:</strong> ${loadedSchedule.routes.length}<br>
+        <strong>Braucieni (plānošanas entītes):</strong> ${loadedSchedule.departureTimes.length}<br>
+        <strong>Stacijas:</strong> ${loadedSchedule.stations.length}<br>
+        <strong>Risinājuma laiks:</strong> 30 sekundes katram algoritmam
+    `;
+    $('#problemDescription').html(problemDesc);
+
+    // Run each algorithm
+    for (let i = 0; i < algorithms.length; i++) {
+        const algo = algorithms[i];
+        $('#benchmarkProgress').text(`${i}/${algorithms.length} - ${algo.name}`);
+        $('#benchmarkProgressBar').css('width', `${(i / algorithms.length) * 100}%`);
+
+        try {
+            const result = await runSingleBenchmark(algo.id, algo.name);
+            benchmarkResults.push(result);
+        } catch (err) {
+            benchmarkResults.push({
+                algorithm: algo.name,
+                hardScore: 'Error',
+                softScore: 'Error',
+                time: 0,
+                iterations: 0,
+                error: err.message
+            });
+        }
+    }
+
+    // Complete
+    $('#benchmarkProgress').text(`${algorithms.length}/${algorithms.length}`);
+    $('#benchmarkProgressBar').css('width', '100%');
+
+    // Show results
+    setTimeout(() => {
+        displayBenchmarkResults();
+    }, 500);
+}
+
+/**
+ * Run a single benchmark for one algorithm
+ */
+function runSingleBenchmark(algorithmId, algorithmName) {
+    return new Promise((resolve, reject) => {
+        const startTime = Date.now();
+
+        // Start solving with algorithm parameter
+        $.ajax({
+            url: `/schedules?algorithm=${algorithmId}`,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(loadedSchedule),
+            success: function(jobId) {
+                // Wait for solving to complete (max 35 seconds)
+                let checkCount = 0;
+                const maxChecks = 70; // 35 seconds with 500ms intervals
+
+                const checkStatus = setInterval(() => {
+                    checkCount++;
+
+                    $.getJSON(`/schedules/${jobId}`, function(result) {
+                        if (result.solverStatus === 'NOT_SOLVING' || checkCount >= maxChecks) {
+                            clearInterval(checkStatus);
+                            const endTime = Date.now();
+
+                            // Parse score
+                            let hardScore = 0, softScore = 0;
+                            if (result.score) {
+                                const match = result.score.match(/(-?\d+)hard\/(-?\d+)soft/);
+                                if (match) {
+                                    hardScore = parseInt(match[1]);
+                                    softScore = parseInt(match[2]);
+                                }
+                            }
+
+                            // Stop solving if still running
+                            if (result.solverStatus !== 'NOT_SOLVING') {
+                                $.delete(`/schedules/${jobId}`);
+                            }
+
+                            resolve({
+                                algorithm: algorithmName,
+                                hardScore: hardScore,
+                                softScore: softScore,
+                                time: ((endTime - startTime) / 1000).toFixed(1),
+                                iterations: checkCount,
+                                score: result.score
+                            });
+                        }
+                    }).fail(() => {
+                        clearInterval(checkStatus);
+                        reject(new Error('Failed to get solver status'));
+                    });
+                }, 500);
+            },
+            error: function(xhr) {
+                reject(new Error(xhr.statusText));
+            }
+        });
+    });
+}
+
+/**
+ * Display benchmark results in table
+ */
+function displayBenchmarkResults() {
+    $('#benchmarkLoading').hide();
+    $('#benchmarkResults').show();
+
+    const tbody = $('#benchmarkTableBody');
+    tbody.empty();
+
+    // Find best results
+    let bestHard = Math.max(...benchmarkResults.filter(r => typeof r.hardScore === 'number').map(r => r.hardScore));
+    let bestSoft = Math.max(...benchmarkResults.filter(r => typeof r.softScore === 'number').map(r => r.softScore));
+
+    benchmarkResults.forEach(result => {
+        const isError = result.error;
+        const isBestHard = result.hardScore === bestHard && typeof result.hardScore === 'number';
+        const isBestSoft = result.softScore === bestSoft && typeof result.softScore === 'number';
+
+        const hardClass = isBestHard ? 'text-success fw-bold' : (result.hardScore < 0 ? 'text-danger' : '');
+        const softClass = isBestSoft ? 'text-success fw-bold' : '';
+
+        tbody.append(`
+            <tr class="${isError ? 'table-danger' : ''}">
+                <td><i class="fas fa-cog me-1"></i>${result.algorithm}</td>
+                <td class="text-center ${hardClass}">${result.hardScore}${isBestHard ? ' ⭐' : ''}</td>
+                <td class="text-center ${softClass}">${result.softScore}${isBestSoft ? ' ⭐' : ''}</td>
+                <td class="text-center">${result.time}s</td>
+                <td class="text-center">${result.iterations}</td>
+            </tr>
+        `);
+    });
+
+    // Generate conclusion
+    const validResults = benchmarkResults.filter(r => typeof r.hardScore === 'number');
+    if (validResults.length > 0) {
+        const bestResult = validResults.reduce((a, b) => {
+            if (a.hardScore !== b.hardScore) return a.hardScore > b.hardScore ? a : b;
+            return a.softScore > b.softScore ? a : b;
+        });
+
+        $('#benchmarkConclusion').html(`
+            <strong>Labākais algoritms:</strong> ${bestResult.algorithm}<br>
+            <strong>Score:</strong> ${bestResult.score}<br>
+            <strong>Secinājums:</strong> ${bestResult.algorithm} sasniedza labāko rezultātu ar hard score ${bestResult.hardScore} 
+            un soft score ${bestResult.softScore} ${bestResult.time} sekundēs.
+            ${bestResult.hardScore < 0 ? '<br><span class="text-warning">⚠️ Piezīme: Negatīvs hard score norāda uz neapmierinātiem ierobežojumiem. Iespējams, nepieciešams vairāk laika vai vilcienu.</span>' : ''}
+        `);
+    }
+}
+
+/**
+ * Export benchmark results as JSON
+ */
+function exportBenchmarkResults() {
+    if (benchmarkResults.length === 0) {
+        showError("Eksports neizdevās", { statusText: "Nav benchmark rezultātu" });
+        return;
+    }
+
+    const exportData = {
+        timestamp: new Date().toISOString(),
+        problem: {
+            trains: loadedSchedule.trains.length,
+            routes: loadedSchedule.routes.length,
+            departures: loadedSchedule.departureTimes.length,
+            stations: loadedSchedule.stations.length
+        },
+        results: benchmarkResults
+    };
+
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `benchmark-results-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showSuccess("Eksportēts!", "Benchmark rezultāti saglabāti.");
 }

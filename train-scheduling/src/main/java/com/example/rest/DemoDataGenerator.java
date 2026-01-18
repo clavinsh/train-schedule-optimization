@@ -125,27 +125,27 @@ public class DemoDataGenerator {
      * Generates default size dataset
      */
     public static RollingStockSchedule generateDefaultDataset() {
-        return generateDataset(6, 22, 2); // 6 AM to 10 PM, every 2 hours
+        return generateDataset(6, 22, 2, 5, 6); // 6 AM to 10 PM, every 2 hours, 5 trains, 6 routes
     }
 
     /**
      * Generates small dataset for quick testing
      */
     public static RollingStockSchedule generateSmallDataset() {
-        return generateDataset(8, 18, 2); // 8 AM to 6 PM, every 2 hours
+        return generateDataset(7, 19, 4, 3, 4); // 7 AM to 7 PM, every 4 hours, 3 trains, 4 routes
     }
 
     /**
      * Generates large dataset for stress testing
      */
     public static RollingStockSchedule generateLargeDataset() {
-        return generateDataset(6, 22, 1); // 6 AM to 10 PM, every hour
+        return generateDataset(6, 22, 2, 8, 8); // 6 AM to 10 PM, every 2 hours, 8 trains, 8 routes
     }
 
     /**
-     * Generates dataset with configurable time range
+     * Generates dataset with configurable time range, train count, and route count
      */
-    private static RollingStockSchedule generateDataset(int startHour, int endHour, int intervalHours) {
+    private static RollingStockSchedule generateDataset(int startHour, int endHour, int intervalHours, int trainCount, int maxRoutes) {
         // Create configuration
         TrainConfiguration configuration = new TrainConfiguration(
                 Duration.ofMinutes(5),  // Minimum 5 minutes between trains
@@ -157,12 +157,11 @@ public class DemoDataGenerator {
         Map<Long, Station> stationMap = new HashMap<>();
         List<Station> stations = generateStations(stationMap);
 
-        // Create routes
-        List<Route> routes = generateRoutes(stationMap);
+        // Create routes - limit by maxRoutes parameter
+        List<Route> allRoutes = generateRoutes(stationMap);
+        List<Route> routes = allRoutes.subList(0, Math.min(maxRoutes, allRoutes.size()));
 
-        // Create trains
-        // int trainCount = intervalHours == 1 ? 40 : 30;
-        int trainCount = 4;
+        // Create trains (now using parameter)
         List<Train> trains = generateTrains(trainCount);
 
         // Create depots
@@ -378,6 +377,7 @@ public class DemoDataGenerator {
 
     /**
      * Generate routes covering all major lines, including reverse routes.
+     * Routes are ordered by length (shortest first) for easier subset selection.
      */
     private static List<Route> generateRoutes(Map<Long, Station> stationMap) {
         List<Route> routes = new ArrayList<>();
@@ -411,43 +411,46 @@ public class DemoDataGenerator {
                     reverseStations));
         };
 
-        // Define routes
-        addRouteAndReverse.accept("Riga-Liepaja", new Long[]{
-                1L, 3L, 61L, 62L, 63L, 64L, 65L, 66L, 67L, 68L, 69L, 70L, 71L, 72L, 73L, 74L, 75L, 76L});
+        // Define routes - ORDERED BY LENGTH (shortest first)
+        // Short commuter routes (~30-45 min trip time at 3min/station)
+        addRouteAndReverse.accept("Riga-Jurmala", new Long[]{
+                1L, 3L, 87L, 88L, 89L, 90L, 91L, 92L, 93L, 94L, 95L, 96L, 97L}); // 13 stations = 39min
 
-        addRouteAndReverse.accept("Riga-Tukums II", new Long[]{
-                1L, 3L, 87L, 88L, 89L, 90L, 91L, 92L, 93L, 94L, 95L, 96L, 97L, 98L, 99L, 100L,
-                101L, 102L, 103L, 104L, 105L, 106L, 107L, 108L, 109L});
+        addRouteAndReverse.accept("Riga-Jelgava", new Long[]{
+                1L, 3L, 61L, 62L, 63L, 64L, 65L, 66L, 67L, 68L, 69L, 70L, 71L}); // 13 stations = 39min
+
+        addRouteAndReverse.accept("Riga-Ogre", new Long[]{
+                1L, 2L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L}); // 14 stations = 42min
+
+        // Medium routes (~60-75 min trip time)
+        addRouteAndReverse.accept("Riga-Skulte", new Long[]{
+                1L, 4L, 130L, 131L, 132L, 133L, 134L, 135L, 136L, 137L, 138L, 139L, 140L, 141L,
+                142L, 143L, 144L, 145L, 146L, 147L, 148L}); // 21 stations = 63min
 
         addRouteAndReverse.accept("Riga-Valga", new Long[]{
                 1L, 4L, 110L, 111L, 112L, 113L, 114L, 115L, 116L, 117L, 118L, 119L, 120L, 121L,
-                122L, 123L, 124L, 125L, 126L, 127L, 128L, 129L});
+                122L, 123L, 124L, 125L, 126L, 127L, 128L, 129L}); // 22 stations = 66min
 
-        addRouteAndReverse.accept("Riga-Skulte", new Long[]{
-                1L, 4L, 130L, 131L, 132L, 133L, 134L, 135L, 136L, 137L, 138L, 139L, 140L, 141L,
-                142L, 143L, 144L, 145L, 146L, 147L, 148L});
+        addRouteAndReverse.accept("Riga-Tukums II", new Long[]{
+                1L, 3L, 87L, 88L, 89L, 90L, 91L, 92L, 93L, 94L, 95L, 96L, 97L, 98L, 99L, 100L,
+                101L, 102L, 103L, 104L, 105L, 106L, 107L, 108L, 109L}); // 25 stations = 75min
 
-        addRouteAndReverse.accept("Riga-Ogre", new Long[]{
-                1L, 2L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L});
+        // Long distance routes (these need more time)
+        addRouteAndReverse.accept("Riga-Liepaja", new Long[]{
+                1L, 3L, 61L, 62L, 63L, 64L, 65L, 66L, 67L, 68L, 69L, 70L, 71L, 72L, 73L, 74L, 75L, 76L}); // 18 stations = 54min
+
+        addRouteAndReverse.accept("Riga-Gulbene", new Long[]{
+                1L, 2L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L, 17L, 18L, 19L, 20L,
+                21L, 22L, 23L, 24L, 25L, 26L, 27L, 28L, 29L, 54L, 55L, 56L, 57L, 58L, 59L, 60L}); // 34 stations = 102min
 
         addRouteAndReverse.accept("Riga-Indra", new Long[]{
                 1L, 2L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L, 17L, 18L, 19L, 20L,
-                21L, 22L, 23L, 24L, 25L, 26L, 27L, 28L, 29L, 30L, 31L, 32L, 33L, 34L, 35L, 36L, 37L, 38L});
+                21L, 22L, 23L, 24L, 25L, 26L, 27L, 28L, 29L, 30L, 31L, 32L, 33L, 34L, 35L, 36L, 37L, 38L}); // 36 stations = 108min
 
         addRouteAndReverse.accept("Riga-Zilupe", new Long[]{
                 1L, 2L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L, 17L, 18L, 19L, 20L,
                 21L, 22L, 23L, 24L, 25L, 26L, 27L, 28L, 29L, 39L, 40L, 41L, 42L, 43L, 44L, 45L,
-                46L, 47L, 48L, 49L, 50L, 51L, 52L, 53L});
-
-        addRouteAndReverse.accept("Riga-Gulbene", new Long[]{
-                1L, 2L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L, 17L, 18L, 19L, 20L,
-                21L, 22L, 23L, 24L, 25L, 26L, 27L, 28L, 29L, 54L, 55L, 56L, 57L, 58L, 59L, 60L});
-
-        addRouteAndReverse.accept("Riga-Jelgava", new Long[]{
-                1L, 3L, 61L, 62L, 63L, 64L, 65L, 66L, 67L, 68L, 69L, 70L, 71L});
-
-        addRouteAndReverse.accept("Riga-Jurmala", new Long[]{
-                1L, 3L, 87L, 88L, 89L, 90L, 91L, 92L, 93L, 94L, 95L, 96L, 97L});
+                46L, 47L, 48L, 49L, 50L, 51L, 52L, 53L}); // 42 stations = 126min
 
         return routes;
     }
@@ -501,15 +504,21 @@ public class DemoDataGenerator {
 
     /**
      * Generate train-depo assignments
+     * All trains are assigned to Riga main depot since all routes start/end in Riga
      */
     private static List<TrainDepoAssignment> generateTrainDepoAssignments(List<Train> trains, List<Depo> depos) {
         List<TrainDepoAssignment> assignments = new ArrayList<>();
 
+        // Find Riga main depot (ID 1)
+        Depo rigaDepo = depos.stream()
+                .filter(d -> d.getId() == 1L)
+                .findFirst()
+                .orElse(depos.get(0));
+
         for (int i = 0; i < trains.size(); i++) {
             Train train = trains.get(i);
-            // Distribute trains across depots
-            Depo depo = depos.get(i % depos.size());
-            assignments.add(new TrainDepoAssignment((long) (i + 1), train, depo));
+            // All trains assigned to Riga depot - all routes start/end in Riga
+            assignments.add(new TrainDepoAssignment((long) (i + 1), train, rigaDepo));
         }
 
         return assignments;
