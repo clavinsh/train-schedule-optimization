@@ -104,7 +104,8 @@ public class DemoDataGenerator {
         // DepartureTimes
         System.out.println("--- DepartureTimes (showing " + sampleSize + " of " +
                 schedule.getDepartureTimes().size() + ") ---");
-        schedule.getDepartureTimes().stream().limit(sampleSize).forEach(dt ->
+        // schedule.getDepartureTimes().stream().limit(sampleSize).forEach(dt ->
+        schedule.getDepartureTimes().stream().forEach(dt ->
                 System.out.println("  DepartureTime #" + dt.getId() + " - " + dt.getStation().getName() +
                         " on " + dt.getRoute().getName() +
                         " (train: " + (dt.getTrain() != null ? dt.getTrain().getId() : "unassigned") +
@@ -125,7 +126,7 @@ public class DemoDataGenerator {
      * Generates default size dataset
      */
     public static RollingStockSchedule generateDefaultDataset() {
-        return generateDataset(6, 22, 2, 5, 6); // 6 AM to 10 PM, every 2 hours, 5 trains, 6 routes
+        return generateDataset(6, 22, 2, 30, 6); // 6 AM to 10 PM, every 2 hours, 5 trains, 6 routes
     }
 
     /**
@@ -177,7 +178,7 @@ public class DemoDataGenerator {
         List<LocalTime> availableDepartureTimes = generateAvailableDepartureTimes(startHour, endHour);
 
         // Create departure times (planning entities)
-        List<DepartureTime> departureTimes = generateDepartureTimes(routes, stationDemands,
+        List<DepartureTime> departureTimes = generateDepartureTimes(routes, trains, stationDemands,
                 startHour, endHour, intervalHours);
 
         RollingStockSchedule schedule = new RollingStockSchedule();
@@ -589,7 +590,7 @@ public class DemoDataGenerator {
      * of a route and covering the entire route. Timefold assigns which train runs the trip
      * and at what time it departs.
      */
-    private static List<DepartureTime> generateDepartureTimes(List<Route> routes,
+    private static List<DepartureTime> generateDepartureTimes(List<Route> routes, List<Train> trains,
             List<StationDemand> stationDemands, int startHour, int endHour, int intervalHours) {
         List<DepartureTime> departureTimes = new ArrayList<>();
         long id = 1L;
@@ -602,22 +603,35 @@ public class DemoDataGenerator {
                     .put(demand.getTime().getHour(), demand);
         }
 
-        for (Route route : routes) {
-            Station firstStation = route.getStations().get(0);
-            String lookupKey = firstStation.getId() + "-" + route.getId();
-            Map<Integer, StationDemand> hourlyDemands = demandLookup.getOrDefault(lookupKey, new HashMap<>());
+        // Initialize train index for round-robin assignment
+        int trainIndex = 0;
 
-            // Generate one departure per time slot per route
-            // This represents "we need a train to run this route at approximately this hour"
-            for (int hour = startHour; hour <= endHour; hour += intervalHours) {
-                DepartureTime departure = new DepartureTime();
-                departure.setId(id++);
-                departure.setStation(firstStation);
-                departure.setRoute(route);
-                departure.setStationIndexInRoute(0);
-                departure.setHourlyDemands(hourlyDemands);
-                // Train and departure time are null - Timefold will assign them
-                departureTimes.add(departure);
+        for (Route route : routes) {
+            for (int stationIndex = 0; stationIndex < route.getStations().size(); stationIndex++) {
+                Station currentStation = route.getStations().get(stationIndex);
+                String lookupKey = currentStation.getId() + "-" + route.getId();
+                Map<Integer, StationDemand> hourlyDemands = demandLookup.getOrDefault(lookupKey, new HashMap<>());
+
+                // Generate one departure per time slot per station on the route
+                // This represents "we need a train to run this route at approximately this hour, passing through this station"
+                for (int hour = startHour; hour <= endHour; hour += intervalHours) {
+                    DepartureTime departure = new DepartureTime();
+                    departure.setId(id++);
+                    departure.setStation(currentStation);
+                    departure.setRoute(route);
+                    departure.setStationIndexInRoute(stationIndex);
+                    departure.setHourlyDemands(hourlyDemands);
+
+                    // Pre-assign a train and a departure time to reduce initial unassigned variables for CH
+                    departure.setTrain(trains.get(trainIndex));
+                    trainIndex = (trainIndex + 1) % trains.size(); // Round-robin assignment
+
+                    // Assign an initial departure time. Using the start of the hour for simplicity.
+                    // The solver can then adjust this time.
+                    departure.setDepartureTime(LocalTime.of(hour, 0));
+
+                    departureTimes.add(departure);
+                }
             }
         }
 

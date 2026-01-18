@@ -9,6 +9,7 @@ import ai.timefold.solver.core.api.domain.lookup.PlanningId;
 import ai.timefold.solver.core.api.domain.variable.PlanningVariable;
 import ai.timefold.solver.core.api.domain.variable.ShadowVariable;
 import ai.timefold.solver.core.api.domain.variable.ShadowSources;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -77,6 +78,7 @@ public class DepartureTime {
     /**
      * Gets the next station on the route, or null if this is the last station
      */
+    @JsonIgnore
     public Station getNextStation() {
         if (isLastStation()) {
             return null;
@@ -87,6 +89,7 @@ public class DepartureTime {
     /**
      * Gets the previous station on the route, or null if this is the first station
      */
+    @JsonIgnore
     public Station getPreviousStation() {
         if (isFirstStation()) {
             return null;
