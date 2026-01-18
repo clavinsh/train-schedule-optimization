@@ -21,6 +21,12 @@ const timelineOptions = {
     animation: {
         duration: 200,  // Reduced from default 500ms
         easingFunction: 'linear'
+    },
+    // Tooltip configuration - show immediately on hover
+    tooltip: {
+        followMouse: true,
+        overflowMethod: 'cap',
+        delay: 0  // Show immediately without delay
     }
 };
 
