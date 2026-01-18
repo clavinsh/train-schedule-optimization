@@ -5,13 +5,17 @@ import java.util.Objects;
 import com.example.domain.helpers.CoordinateCalc;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import ai.timefold.solver.core.api.domain.lookup.PlanningId;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Represents a railway station with its location and direct connections to other neighboring
  * stations.
  */
+@Setter @Getter @AllArgsConstructor @NoArgsConstructor
 public class Station implements Comparable<Station> {
-
     @PlanningId
     private Long id;
     private String name;
@@ -21,68 +25,10 @@ public class Station implements Comparable<Station> {
     @JsonIgnore // Prevent circular reference during JSON serialization
     private List<Station> neighbors;
 
-    // No-arg constructor required by Jackson
-    public Station() {
-    }
-
-    public Station(Long id, String name, double latitude, double longitude,
-            List<Station> neighbors) {
-        this.id = id;
-        this.name = name;
-        this.latitude = latitude;
-        this.longitude = longitude;
-        this.neighbors = neighbors;
-    }
 
     @Override
     public int compareTo(Station arg0) {
         return id.compareTo(arg0.id);
-    }
-
-    // Getters and setters
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String nosaukums) {
-        this.name = nosaukums;
-    }
-
-    public double getLatitude() {
-        return latitude;
-    }
-
-    public void setLatitude(double latitude) {
-        this.latitude = latitude;
-    }
-
-    public double getLongitude() {
-        return longitude;
-    }
-
-    public void setLongitude(long longitude) {
-        this.longitude = longitude;
-    }
-
-    public List<Station> getNeighbors() {
-        return neighbors;
-    }
-
-    public void setNeighbors(List<Station> neighbors) {
-        this.neighbors = neighbors;
-    }
-
-    public String toString() {
-        return name;
     }
 
     @Override

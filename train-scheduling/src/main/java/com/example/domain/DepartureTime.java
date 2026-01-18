@@ -7,12 +7,18 @@ import ai.timefold.solver.core.api.domain.entity.PlanningEntity;
 import ai.timefold.solver.core.api.domain.lookup.PlanningId;
 import ai.timefold.solver.core.api.domain.variable.PlanningVariable;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 /**
  * Represents a train departure from a specific station on a route at a specific time.
  * This is the core planning entity that Timefold optimizes.
  *
  * Maps to "Atiešanas laiks" from the domain model.
  */
+@Setter @Getter @AllArgsConstructor @NoArgsConstructor
 @PlanningEntity(difficultyComparatorClass = DepartureTime.DifficultyComparator.class)
 public class DepartureTime {
 
@@ -48,18 +54,6 @@ public class DepartureTime {
     // Calculated during solving - tracks passenger changes at this stop
     private int passengerDelta;
 
-    // No-arg constructor required by Timefold
-    public DepartureTime() {
-    }
-
-    public DepartureTime(Long id, Station station, Route route, int stationIndexInRoute) {
-        this.id = id;
-        this.station = station;
-        this.route = route;
-        this.stationIndexInRoute = stationIndexInRoute;
-        this.passengerDelta = 0;
-    }
-
     /**
      * Checks if this departure is the first station on the route
      */
@@ -92,64 +86,6 @@ public class DepartureTime {
             return null;
         }
         return route.getStations().get(stationIndexInRoute - 1);
-    }
-
-    // Getters and setters
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public Station getStation() {
-        return station;
-    }
-
-    public void setStation(Station station) {
-        this.station = station;
-    }
-
-    public Route getRoute() {
-        return route;
-    }
-
-    public void setRoute(Route route) {
-        this.route = route;
-    }
-
-    public int getStationIndexInRoute() {
-        return stationIndexInRoute;
-    }
-
-    public void setStationIndexInRoute(int stationIndexInRoute) {
-        this.stationIndexInRoute = stationIndexInRoute;
-    }
-
-    public Train getTrain() {
-        return train;
-    }
-
-    public void setTrain(Train train) {
-        this.train = train;
-    }
-
-    public LocalTime getDepartureTime() {
-        return departureTime;
-    }
-
-    public void setDepartureTime(LocalTime departureTime) {
-        this.departureTime = departureTime;
-    }
-
-    public int getPassengerDelta() {
-        return passengerDelta;
-    }
-
-    public void setPassengerDelta(int passengerDelta) {
-        this.passengerDelta = passengerDelta;
     }
 
     @Override

@@ -2,41 +2,20 @@ package com.example.domain;
 
 import java.util.Objects;
 import ai.timefold.solver.core.api.domain.lookup.PlanningId;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Represents a train with a maximum passenger capacity
  */
+@Setter @Getter @AllArgsConstructor @NoArgsConstructor
 public class Train {
-
     @PlanningId
     private Long id;
     private int capacity;
-
-    // No-arg constructor required by Jackson
-    public Train() {
-    }
-
-    public Train(Long id, int capacity) {
-        this.id = id;
-        this.capacity = capacity;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public int getCapacity() {
-        return capacity;
-    }
-
-    public void setCapacity(int capacity) {
-        this.capacity = capacity;
-    }
-
+    
     @Override
     public boolean equals(Object o) {
         if (this == o)
