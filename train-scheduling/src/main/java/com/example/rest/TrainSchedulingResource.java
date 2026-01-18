@@ -86,6 +86,8 @@ public class TrainSchedulingResource {
             throw new ScheduleSolverException(jobId,
                     "Schedule with jobId '" + jobId + "' not found.");
         }
+        // Inject current solver status for frontend polling
+        schedule.setSolverStatus(solverManager.getSolverStatus(jobId));
         return schedule;
     }
 

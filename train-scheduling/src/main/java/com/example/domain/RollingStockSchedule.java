@@ -9,6 +9,9 @@ import ai.timefold.solver.core.api.domain.solution.ProblemFactCollectionProperty
 import ai.timefold.solver.core.api.domain.solution.ProblemFactProperty;
 import ai.timefold.solver.core.api.domain.valuerange.ValueRangeProvider;
 import ai.timefold.solver.core.api.score.buildin.hardsoft.HardSoftScore;
+import ai.timefold.solver.core.api.solver.SolverStatus;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -56,4 +59,17 @@ public class RollingStockSchedule {
     // The score calculated by the constraint provider
     @PlanningScore
     private HardSoftScore score;
+
+    // Transient field for JSON serialization only (not part of planning, computed on-demand)
+    @JsonIgnore
+    private transient SolverStatus solverStatus;
+
+    @JsonProperty("solverStatus")
+    public String getSolverStatusString() {
+        return solverStatus != null ? solverStatus.name() : "NOT_SOLVING";
+    }
+
+    public void setSolverStatus(SolverStatus solverStatus) {
+        this.solverStatus = solverStatus;
+    }
 }

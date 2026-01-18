@@ -197,7 +197,7 @@ public class DemoDataGenerator {
     private static List<LocalTime> generateAvailableDepartureTimes(int startHour, int endHour) {
         List<LocalTime> times = new ArrayList<>();
         for (int hour = startHour; hour <= endHour; hour++) {
-            for (int minute = 0; minute < 60; minute += 5) {
+            for (int minute = 0; minute < 60; minute += 1) {
                 times.add(LocalTime.of(hour, minute));
             }
         }

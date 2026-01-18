@@ -13,7 +13,12 @@ const timelineOptions = {
     xss: { disabled: true },
     zoomMin: 1000 * 60 * 60 * 2,  // 2 hours
     zoomMax: 1000 * 60 * 60 * 24, // 24 hours
-    margin: { item: 5 }
+    margin: { item: 5 },
+    // Subtle animations for smoother updates during solving
+    animation: {
+        duration: 200,  // Reduced from default 500ms
+        easingFunction: 'linear'
+    }
 };
 
 // Timeline instances
