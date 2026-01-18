@@ -8,6 +8,7 @@ import com.example.domain.Depo;
 import com.example.domain.Station;
 import com.example.domain.StationDemand;
 import com.example.domain.Train;
+import com.example.domain.TrainDepoAssignment;
 import ai.timefold.solver.core.api.score.buildin.hardsoft.HardSoftScore;
 import ai.timefold.solver.core.api.score.stream.Constraint;
 import ai.timefold.solver.core.api.score.stream.ConstraintCollectors;
@@ -29,6 +30,7 @@ public class TrainScheduleConstraintProvider implements ConstraintProvider {
                 timeMustBeAssigned(constraintFactory),
                 trainCapacityNotExceeded(constraintFactory),
                 trainEndsAtDepo(constraintFactory),
+                trainStartsAtDepo(constraintFactory),
                 minIntervalBetweenTrains(constraintFactory),
                 trainRouteConsistency(constraintFactory),
 
@@ -94,15 +96,16 @@ public class TrainScheduleConstraintProvider implements ConstraintProvider {
                 .ifNotExists(DepartureTime.class,
                         Joiners.equal(DepartureTime::getTrain),
                         Joiners.greaterThan(DepartureTime::getDepartureTime))
-                // Now check if the route's last station is a depot
-                .ifNotExists(Depo.class,
-                        Joiners.filtering((departure, depo) -> {
-                            List<Station> stations = departure.getRoute().getStations();
-                            Station lastStation = stations.get(stations.size() - 1);
-                            return lastStation.equals(depo.getStation());
-                        }))
+                // Now check if the route's last station is the assigned depo
+                .join(TrainDepoAssignment.class,
+                        Joiners.equal(departure -> departure.getTrain(), TrainDepoAssignment::getTrain))
+                .filter((departure, trainDepoAssignment) -> {
+                    List<Station> stations = departure.getRoute().getStations();
+                    Station lastStation = stations.get(stations.size() - 1);
+                    return !lastStation.equals(trainDepoAssignment.getDepo().getStation());
+                })
                 .penalize(HardSoftScore.ONE_HARD)
-                .asConstraint("Train must end at depot");
+                .asConstraint("Train must end at assigned depo");
     }
 
     /**
@@ -153,6 +156,30 @@ public class TrainScheduleConstraintProvider implements ConstraintProvider {
                 })
                 .penalize(HardSoftScore.ONE_HARD)
                 .asConstraint("Train route consistency");
+    }
+
+    /**
+     * Hard constraint: Train's first trip of the day must start at its assigned depo.
+     * For each train, only the trip with the earliest departure time is checked.
+     * That trip's route must start at the train's assigned depo station.
+     */
+    protected Constraint trainStartsAtDepo(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(DepartureTime.class)
+                .filter(departure -> departure.getTrain() != null
+                        && departure.getDepartureTime() != null
+                        && departure.getRoute() != null)
+                // Only consider the first trip of the day for each train
+                .ifNotExists(DepartureTime.class,
+                        Joiners.equal(DepartureTime::getTrain),
+                        Joiners.lessThan(DepartureTime::getDepartureTime))
+                .join(TrainDepoAssignment.class,
+                        Joiners.equal(departureTime -> departureTime.getTrain(), TrainDepoAssignment::getTrain))
+                .filter((departure, trainDepoAssignment) -> {
+                    Station firstStationOfRoute = departure.getRoute().getStations().get(0);
+                    return !firstStationOfRoute.equals(trainDepoAssignment.getDepo().getStation());
+                })
+                .penalize(HardSoftScore.ONE_HARD)
+                .asConstraint("Train must start at assigned depo");
     }
 
     // ========== SOFT CONSTRAINTS ==========

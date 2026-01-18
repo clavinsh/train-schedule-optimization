@@ -157,7 +157,8 @@ public class DemoDataGenerator {
         List<Route> routes = generateRoutes(stationMap);
 
         // Create trains
-        int trainCount = intervalHours == 1 ? 40 : 30;
+        // int trainCount = intervalHours == 1 ? 40 : 30;
+        int trainCount = 4;
         List<Train> trains = generateTrains(trainCount);
 
         // Create depots
