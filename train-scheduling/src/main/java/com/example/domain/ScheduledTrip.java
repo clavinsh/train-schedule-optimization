@@ -8,6 +8,7 @@ import java.util.List;
 import ai.timefold.solver.core.api.domain.entity.PlanningEntity;
 import ai.timefold.solver.core.api.domain.lookup.PlanningId;
 import ai.timefold.solver.core.api.domain.variable.PlanningVariable;
+import ai.timefold.solver.core.api.domain.variable.ShadowVariable;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,10 +33,19 @@ public class ScheduledTrip implements AbstractTrip {
     @PlanningVariable(valueRangeProviderRefs = "departureTimeRange")
     private LocalDateTime departureTime;
 
-    // Shadow variables - computed on demand for now
-    // TODO: Re-enable shadow variables once basic solving works
+    // Shadow variables - automatically updated when planning variables change
     private List<StationVisit> stationVisits;
+
+    @ShadowVariable(variableListenerClass = ScheduledTripVariableListener.class,
+            sourceVariableName = "departureTime")
+    @ShadowVariable(variableListenerClass = ScheduledTripVariableListener.class,
+            sourceVariableName = "assignedTrain")
     private LocalDateTime arrivalTime;
+
+    @ShadowVariable(variableListenerClass = ScheduledTripVariableListener.class,
+            sourceVariableName = "departureTime")
+    @ShadowVariable(variableListenerClass = ScheduledTripVariableListener.class,
+            sourceVariableName = "assignedTrain")
     private List<TrackOccupancy> trackOccupancies;
 
     /**

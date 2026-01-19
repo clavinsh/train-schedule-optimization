@@ -14,7 +14,7 @@
         <constructionHeuristicType>ALLOCATE_ENTITY_FROM_QUEUE</constructionHeuristicType>
     </constructionHeuristic>
 
-    <!-- Local Search: Late Acceptance - accepts if better than score N steps ago -->
+    <!-- Local Search: Late Acceptance with larger history for better soft score exploration -->
     <localSearch>
         <unionMoveSelector>
             <changeMoveSelector/>
@@ -22,11 +22,11 @@
         </unionMoveSelector>
 
         <acceptor>
-            <lateAcceptanceSize>200</lateAcceptanceSize>
+            <lateAcceptanceSize>400</lateAcceptanceSize>
         </acceptor>
 
         <forager>
-            <acceptedCountLimit>4</acceptedCountLimit>
+            <acceptedCountLimit>8</acceptedCountLimit>
         </forager>
     </localSearch>
 </solver>

@@ -296,12 +296,16 @@ public class DemoDataGenerator {
     }
 
     /**
-     * Link connections to their respective stations
+     * Link connections to their respective stations and initialize caches
      */
     private static void linkConnectionsToStations(List<Station> stations, List<Connection> connections) {
         for (Connection conn : connections) {
             conn.getA().getConnections().add(conn);
             conn.getB().getConnections().add(conn);
+        }
+        // Initialize connection lookup cache for each station
+        for (Station station : stations) {
+            station.initConnectionCache();
         }
     }
 
@@ -326,6 +330,7 @@ public class DemoDataGenerator {
             route.setName(name);
             route.setStops(stops);
             route.setTurnaroundTimeSeconds(300); // 5 minutes turnaround
+            route.initCache(); // Initialize pre-computed data
             return route;
         };
 
