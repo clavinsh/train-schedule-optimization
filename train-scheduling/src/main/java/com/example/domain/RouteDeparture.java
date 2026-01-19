@@ -11,6 +11,7 @@ import ai.timefold.solver.core.api.domain.lookup.PlanningId;
 import ai.timefold.solver.core.api.domain.variable.PlanningVariable;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.example.domain.TrainConfiguration;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -62,20 +63,22 @@ public class RouteDeparture {
 
     @PlanningVariable(valueRangeProviderRefs = "timeRange")
     private LocalTime departureTime;
+    private TrainConfiguration trainConfiguration;
 
-    // Configuration: minutes per station (used for arrival time calculation)
-    private static final int MINUTES_PER_STATION = 3;
 
-    public RouteDeparture(Long id, Route route) {
+
+    public RouteDeparture(Long id, Route route, TrainConfiguration trainConfiguration) {
         this.id = id;
         this.route = route;
+        this.trainConfiguration = trainConfiguration;
     }
 
-    public RouteDeparture(Long id, Route route, Train train, LocalTime departureTime) {
+    public RouteDeparture(Long id, Route route, Train train, LocalTime departureTime, TrainConfiguration trainConfiguration) {
         this.id = id;
         this.route = route;
         this.train = train;
         this.departureTime = departureTime;
+        this.trainConfiguration = trainConfiguration;
     }
 
     // ========== Derived Properties (computed from departure time) ==========
@@ -111,13 +114,20 @@ public class RouteDeparture {
      * @return arrival time at that station, or null if departure time not set
      */
     public LocalTime getArrivalTimeAt(int stationIndex) {
-        if (departureTime == null || route == null) {
+        if (departureTime == null || route == null || trainConfiguration == null) {
             return null;
         }
         if (stationIndex < 0 || stationIndex >= route.getStations().size()) {
             return null;
         }
-        return departureTime.plusMinutes((long) stationIndex * MINUTES_PER_STATION);
+
+        double cumulativeDistance = 0.0;
+        List<Station> stations = route.getStations();
+        for (int i = 0; i < stationIndex; i++) {
+            cumulativeDistance += stations.get(i).distanceTo(stations.get(i + 1));
+        }
+
+        return departureTime.plus(trainConfiguration.calculateTravelTime(cumulativeDistance));
     }
 
     /**
@@ -128,8 +138,7 @@ public class RouteDeparture {
         if (departureTime == null || route == null) {
             return null;
         }
-        int stationCount = route.getStations().size();
-        return departureTime.plusMinutes((long) (stationCount - 1) * MINUTES_PER_STATION);
+        return getArrivalTimeAt(route.getStations().size() - 1);
     }
 
     /**
@@ -137,10 +146,17 @@ public class RouteDeparture {
      */
     @JsonIgnore
     public int getTripDurationMinutes() {
-        if (route == null) {
+        if (route == null || trainConfiguration == null) {
             return 0;
         }
-        return (route.getStations().size() - 1) * MINUTES_PER_STATION;
+
+        double totalDistance = 0.0;
+        List<Station> stations = route.getStations();
+        for (int i = 0; i < stations.size() - 1; i++) {
+            totalDistance += stations.get(i).distanceTo(stations.get(i + 1));
+        }
+
+        return (int) trainConfiguration.calculateTravelTime(totalDistance).toMinutes();
     }
 
     /**

@@ -402,7 +402,7 @@ public class TrainSchedulingResource {
         java.util.List<com.example.domain.RouteDeparture> clonedDepartures = new java.util.ArrayList<>();
         for (com.example.domain.RouteDeparture rd : original.getRouteDepartures()) {
             com.example.domain.RouteDeparture clonedRd = new com.example.domain.RouteDeparture(
-                    rd.getId(), rd.getRoute());
+                    rd.getId(), rd.getRoute(), original.getConfiguration());
             clonedRd.setStationDemandLookup(rd.getStationDemandLookup());
             // Reset planning variables
             clonedRd.setTrain(null);

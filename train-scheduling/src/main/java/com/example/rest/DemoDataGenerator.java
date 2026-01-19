@@ -106,7 +106,7 @@ public class DemoDataGenerator {
         // Create route departures (planning entities)
         // Each represents a potential trip slot - solver assigns train and time
         // Pass stationDemands so each departure can calculate route-wide demand
-        List<RouteDeparture> routeDepartures = generateRouteDepartures(routes, stationDemands, startHour, endHour, intervalHours);
+        List<RouteDeparture> routeDepartures = generateRouteDepartures(routes, stationDemands, startHour, endHour, intervalHours, configuration);
 
         RollingStockSchedule schedule = new RollingStockSchedule();
         schedule.setTrains(trains);
@@ -530,7 +530,7 @@ public class DemoDataGenerator {
      * @return List of RouteDeparture planning entities (with null train and time - to be assigned by solver)
      */
     private static List<RouteDeparture> generateRouteDepartures(List<Route> routes,
-            List<StationDemand> stationDemands, int startHour, int endHour, int intervalHours) {
+            List<StationDemand> stationDemands, int startHour, int endHour, int intervalHours, TrainConfiguration configuration) {
         List<RouteDeparture> departures = new ArrayList<>();
         long id = 1L;
 
@@ -547,7 +547,7 @@ public class DemoDataGenerator {
             for (int hour = startHour; hour <= endHour; hour += intervalHours) {
                 for (int slot = 0; slot < tripsPerBlock; slot++) {
                     // Create a trip slot with demand lookup populated
-                    RouteDeparture departure = new RouteDeparture(id++, route);
+                    RouteDeparture departure = new RouteDeparture(id++, route, configuration);
                     departure.setStationDemandLookup(routeDemandLookup);
                     departures.add(departure);
                 }

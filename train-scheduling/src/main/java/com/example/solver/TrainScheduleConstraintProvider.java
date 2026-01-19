@@ -5,12 +5,16 @@ import java.time.Duration;
 import com.example.domain.RouteDeparture;
 import com.example.domain.Station;
 import com.example.domain.TrainDepoAssignment;
+import com.example.domain.Depo;
+import com.example.domain.TrainConfiguration;
 
 import ai.timefold.solver.core.api.score.buildin.hardsoft.HardSoftScore;
 import ai.timefold.solver.core.api.score.stream.Constraint;
 import ai.timefold.solver.core.api.score.stream.ConstraintFactory;
 import ai.timefold.solver.core.api.score.stream.ConstraintProvider;
 import ai.timefold.solver.core.api.score.stream.Joiners;
+import ai.timefold.solver.core.api.score.stream.ConstraintCollectors;
+import java.util.function.Function;
 
 /**
  * {@link ConstraintProvider} for the Train Schedule Optimization problem.
@@ -28,23 +32,25 @@ import ai.timefold.solver.core.api.score.stream.Joiners;
 public class TrainScheduleConstraintProvider implements ConstraintProvider {
 
     // Configuration constants (could be moved to TrainConfiguration)
-    private static final int MIN_INTERVAL_MINUTES = 5;
+
     private static final double UNDERUTILIZATION_THRESHOLD = 0.2;
 
     @Override
     public Constraint[] defineConstraints(ConstraintFactory constraintFactory) {
         return new Constraint[] {
                 // Hard constraints
-                trainEndsAtDepo(constraintFactory), 
-                trainStartsAtDepo(constraintFactory), 
-                noOverlappingTrips(constraintFactory), 
-                trainContinuity(constraintFactory), 
-                minIntervalBetweenDepartures(constraintFactory), 
-                trainCapacityNotExceeded(constraintFactory), 
+                trainEndsAtDepo(constraintFactory), // Vilciens sāk dienu DEPO
+                trainStartsAtDepo(constraintFactory), // Vilciens beidz dienu tajā pašā DEPO kurā sāka
+                noOverlappingTrips(constraintFactory), // Vienam vilcienam nevar būt laiku pārklājoši braucieni
+                trainContinuity(constraintFactory), // Vilciens nevar "teleportēties", t.i., ja beidz stacijā Y, tad jābrauc no stacijas Y
+                minIntervalBetweenDepartures(constraintFactory), // Starp braucieniem pa vienu maršrutu jābut noteiktai laika atstarpei starp vilcieniem
+                                                                 // (negriba kolīzijas)
+                trainCapacityNotExceeded(constraintFactory),  // Pārbaudam vai vilciena kapacitāte netiek pārsniegta ņemot vērā stacijas cilvēku pieprasījumu
+                depotCapacityNotExceeded(constraintFactory), // Nedrīkstam pārsniegt DEPO kapacitāti
 
                 // Soft constraints
-                maximizePassengerPickup(constraintFactory),
-                minimizeUnderutilizedTrips(constraintFactory)
+                maximizePassengerPickup(constraintFactory), // Mēģinam savākt pēc iespējas vairāk pasažierus
+                minimizeUnderutilizedTrips(constraintFactory) // Izvairamies no brauciniem ar mazu pasažieru skaitu
         };
     }
 
@@ -169,16 +175,25 @@ public class TrainScheduleConstraintProvider implements ConstraintProvider {
      */
     protected Constraint minIntervalBetweenDepartures(ConstraintFactory constraintFactory) {
         return constraintFactory.forEachUniquePair(RouteDeparture.class,
-                        // Match trips starting from the same station
                         Joiners.equal(RouteDeparture::getFirstStation))
-                .filter((rd1, rd2) -> rd1.getTrain() != null && rd2.getTrain() != null &&
-                        !rd1.getTrain().equals(rd2.getTrain()) &&
-                        rd1.getDepartureTime() != null && rd2.getDepartureTime() != null)
-                .filter((rd1, rd2) -> {
+                .join(TrainConfiguration.class,
+                        // Dummy joiner to bring in the single TrainConfiguration fact.
+                        // We join on a constant, effectively joining all rd1 with the single config.
+                        Joiners.equal((rd1, config) -> 1, config -> 1)) // Use ifExists to add the single TrainConfiguration fact
+                .filter((RouteDeparture rd1, RouteDeparture rd2, TrainConfiguration config) -> {
+                    if (rd1.getTrain() == null || rd2.getTrain() == null ||
+                            rd1.getDepartureTime() == null || rd2.getDepartureTime() == null ||
+                            config == null) {
+                        return false;
+                    }
+                    if (rd1.getTrain().equals(rd2.getTrain())) {
+                        return false;
+                    }
+
                     Duration interval = Duration.between(
                             rd1.getDepartureTime(),
                             rd2.getDepartureTime()).abs();
-                    return interval.toMinutes() < MIN_INTERVAL_MINUTES;
+                    return interval.toMinutes() < config.getMinIntervalBetweenTrains().toMinutes();
                 })
                 .penalize(HardSoftScore.ONE_HARD)
                 .asConstraint("Minimum interval between departures");
@@ -196,6 +211,18 @@ public class TrainScheduleConstraintProvider implements ConstraintProvider {
                 .filter(RouteDeparture::exceedsCapacity)
                 .penalize(HardSoftScore.ONE_HARD, RouteDeparture::getCapacityOverflow)
                 .asConstraint("Train capacity not exceeded");
+    }
+
+    protected Constraint depotCapacityNotExceeded(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Depo.class)
+                .join(TrainDepoAssignment.class,
+                        Joiners.equal(Function.identity(), TrainDepoAssignment::getDepo))
+                .groupBy((Depo depo, TrainDepoAssignment tda) -> depo,
+                         ConstraintCollectors.countBi())
+                .filter((depo, assignedTrainCount) -> assignedTrainCount > depo.getCapacity())
+                .penalize(HardSoftScore.ONE_HARD,
+                        (depo, assignedTrainCount) -> assignedTrainCount - depo.getCapacity())
+                .asConstraint("Depot capacity not exceeded");
     }
 
     // ========== SOFT CONSTRAINTS ==========
