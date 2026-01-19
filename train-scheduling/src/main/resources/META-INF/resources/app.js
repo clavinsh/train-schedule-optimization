@@ -80,9 +80,6 @@ function setupEventHandlers() {
     $("#stopSolvingButton").click(stopSolving);
     $("#analyzeButton").click(analyze);
     $("#exportButton").click(exportScheduleJson);
-    $("#importButton").click(() => $("#importFileInput").click());
-    $("#importFileInput").change(importScheduleJson);
-
     // Dataset size selection
     $(".dataset-option").click(function(e) {
         e.preventDefault();
@@ -622,39 +619,6 @@ function exportScheduleJson() {
     showSuccess("Exported!", "Schedule JSON downloaded.");
 }
 
-function importScheduleJson(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const schedule = JSON.parse(e.target.result);
-
-            // Basic validation
-            if (!schedule.trains || !schedule.routes || !schedule.routeDepartures) {
-                showError("Import failed", { statusText: "Invalid schedule format. Must contain trains, routes, and routeDepartures." });
-                return;
-            }
-
-            // Reset solver state
-            scheduleId = null;
-            loadedSchedule = schedule;
-
-            // Render the imported schedule
-            renderSchedule(schedule);
-            refreshSolvingButtons(false);
-
-            showSuccess("Imported!", `Loaded ${schedule.routeDepartures.length} departures, ${schedule.trains.length} trains, ${schedule.routes.length} routes.`);
-        } catch (err) {
-            showError("Import failed", { statusText: "Invalid JSON: " + err.message });
-        }
-    };
-    reader.readAsText(file);
-
-    // Reset file input so same file can be re-imported
-    event.target.value = '';
-}
 /**
  * Show trip details in a modal when clicking on a timeline item
  */
