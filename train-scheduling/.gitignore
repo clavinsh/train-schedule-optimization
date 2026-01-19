@@ -1,0 +1,23 @@
+# Maven wrapper (kept locally only)
+.mvn/
+mvnw
+mvnw.cmd
+
+# Build outputs
+target/
+*.class
+
+# Local benchmark reports and data
+local/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS files
+.DS_Store
+Thumbs.db

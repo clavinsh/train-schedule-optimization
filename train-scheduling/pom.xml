@@ -64,6 +64,14 @@
             <groupId>ai.timefold.solver</groupId>
             <artifactId>timefold-solver-quarkus-jackson</artifactId>
         </dependency>
+        <dependency>
+            <groupId>ai.timefold.solver</groupId>
+            <artifactId>timefold-solver-benchmark</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ai.timefold.solver</groupId>
+            <artifactId>timefold-solver-jackson</artifactId>
+        </dependency>
 
         <!-- Testing -->
         <dependency>
@@ -155,6 +163,15 @@
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${version.surefire.plugin}</version>
+            </plugin>
+            <!-- Benchmark runner plugin -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <mainClass>com.example.benchmark.BenchmarkRunner</mainClass>
+                </configuration>
             </plugin>
         </plugins>
     </build>

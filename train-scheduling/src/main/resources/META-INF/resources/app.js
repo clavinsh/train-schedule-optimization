@@ -91,7 +91,7 @@ function setupEventHandlers() {
         $(".algorithm-option").removeClass("active");
         $(this).addClass("active");
         selectedAlgorithm = $(this).data("algorithm");
-        showSuccess("Algoritms izvēlēts", `Izvēlēts: ${$(this).text()}`);
+        showSuccess("Algorithm selected", `Selected: ${$(this).text()}`);
     });
 
     // Dataset size selection
@@ -103,11 +103,13 @@ function setupEventHandlers() {
         loadDataset(selectedDatasetSize);
     });
 
-    // Benchmark button
+    // Quick Benchmark button (in-page comparison)
     $("#runBenchmark").click(function(e) {
         e.preventDefault();
         runBenchmark();
     });
+
+
 
     // Export benchmark results
     $("#exportBenchmarkBtn").click(exportBenchmarkResults);
@@ -450,10 +452,12 @@ function createSuccessBanner(message) {
 }
 
 function solve() {
-    $.post("/schedules", JSON.stringify(loadedSchedule), function (data) {
+    // Include selected algorithm in the request
+    const url = `/schedules?algorithm=${encodeURIComponent(selectedAlgorithm)}`;
+    $.post(url, JSON.stringify(loadedSchedule), function (data) {
         scheduleId = data;
         refreshSolvingButtons(true);
-        showSuccess("Solving started!", `Job ID: ${scheduleId}`);
+        showSuccess("Solving started!", `Job ID: ${scheduleId} (Algorithm: ${selectedAlgorithm})`);
     }).fail(function (xhr, ajaxOptions, thrownError) {
         showError("Start solving failed.", xhr);
         refreshSolvingButtons(false);
@@ -735,7 +739,7 @@ function showTripDetails(departureId) {
             currentMinutes += 3; // 3 min to next station
         });
     } else {
-        stationsHtml = '<p class="text-muted">Nav pieejama informācija par pieturām</p>';
+        stationsHtml = '<p class="text-muted">No station information available</p>';
     }
 
     // Calculate estimated passengers - only from first station at departure hour
@@ -755,34 +759,34 @@ function showTripDetails(departureId) {
         <div class="row">
             <div class="col-md-5">
                 <div class="trip-info-section">
-                    <div class="trip-info-label"><i class="fas fa-route me-1"></i> Maršruts</div>
+                    <div class="trip-info-label"><i class="fas fa-route me-1"></i> Route</div>
                     <div class="trip-info-value">${route ? route.name : 'Unknown'}</div>
                     <small class="text-muted">${firstStation} → ${lastStation}</small>
                 </div>
 
                 <div class="trip-info-section">
-                    <div class="trip-info-label"><i class="fas fa-clock me-1"></i> Laiks</div>
+                    <div class="trip-info-label"><i class="fas fa-clock me-1"></i> Time</div>
                     <div class="trip-info-value">${departureTimeStr} - ${arrivalTimeStr}</div>
                 </div>
 
                 <div class="trip-info-section">
-                    <div class="trip-info-label"><i class="fas fa-train me-1"></i> Vilciens</div>
+                    <div class="trip-info-label"><i class="fas fa-train me-1"></i> Train</div>
                     ${train ? `
                         <div class="train-badge">
-                            <strong>V${train.id}</strong>
-                            <span class="ms-2">Kapacitāte: ${train.capacity}</span>
+                            <strong>T${train.id}</strong>
+                            <span class="ms-2">Capacity: ${train.capacity}</span>
                         </div>
-                    ` : '<span class="badge bg-danger">Nav piešķirts</span>'}
+                    ` : '<span class="badge bg-danger">Not assigned</span>'}
                 </div>
 
                 <div class="trip-info-section">
-                    <div class="trip-info-label"><i class="fas fa-users me-1"></i> Pasažieri</div>
-                    <div class="trip-info-value">${estimatedPassengers > 0 ? estimatedPassengers : '~'} gaidāmie pasažieri</div>
+                    <div class="trip-info-label"><i class="fas fa-users me-1"></i> Passengers</div>
+                    <div class="trip-info-value">${estimatedPassengers > 0 ? estimatedPassengers : '~'} expected passengers</div>
                 </div>
             </div>
 
             <div class="col-md-7">
-                <div class="trip-info-label"><i class="fas fa-map-marker-alt me-1"></i> Pieturas</div>
+                <div class="trip-info-label"><i class="fas fa-map-marker-alt me-1"></i> Stops</div>
                 <div class="station-timeline mt-2">
                     ${stationsHtml}
                 </div>
@@ -810,14 +814,14 @@ function loadDataset(size) {
         scheduleId = null;
         loadedSchedule = schedule;
         renderSchedule(schedule);
-        showSuccess("Datu kopa ielādēta", `Vilcieni: ${schedule.trains.length}, Maršruti: ${schedule.routes.length}, Braucieni: ${schedule.departureTimes.length}`);
+        showSuccess("Dataset loaded", `Trains: ${schedule.trains.length}, Routes: ${schedule.routes.length}, Trips: ${schedule.departureTimes.length}`);
     }).fail(function (xhr) {
-        showError("Neizdevās ielādēt datu kopu", xhr);
+        showError("Failed to load dataset", xhr);
     });
 }
 
 /**
- * Run benchmark comparing different algorithms
+ * Run benchmark comparing different algorithms using backend endpoint
  */
 async function runBenchmark() {
     const modal = new bootstrap.Modal(document.getElementById('benchmarkModal'));
@@ -826,57 +830,53 @@ async function runBenchmark() {
     // Reset UI
     $('#benchmarkLoading').show();
     $('#benchmarkResults').hide();
-    $('#benchmarkProgressBar').css('width', '0%');
+    $('#benchmarkProgressBar').css('width', '25%');
+    $('#benchmarkProgress').text('Running benchmark on server...');
     benchmarkResults = [];
-
-    const algorithms = [
-        { id: 'default', name: 'Hill Climbing (Default)' },
-        { id: 'tabu', name: 'Tabu Search' },
-        { id: 'late-acceptance', name: 'Late Acceptance' },
-        { id: 'simulated-annealing', name: 'Simulated Annealing' }
-    ];
 
     // Problem description
     const problemDesc = `
-        <strong>Problēma:</strong> Vilcienu grafika optimizācija<br>
-        <strong>Vilcieni:</strong> ${loadedSchedule.trains.length}<br>
-        <strong>Maršruti:</strong> ${loadedSchedule.routes.length}<br>
-        <strong>Braucieni (plānošanas entītes):</strong> ${loadedSchedule.departureTimes.length}<br>
-        <strong>Stacijas:</strong> ${loadedSchedule.stations.length}<br>
-        <strong>Risinājuma laiks:</strong> 30 sekundes katram algoritmam
+        <strong>Problem:</strong> Train Schedule Optimization<br>
+        <strong>Trains:</strong> ${loadedSchedule.trains.length}<br>
+        <strong>Routes:</strong> ${loadedSchedule.routes.length}<br>
+        <strong>Trips (planning entities):</strong> ${loadedSchedule.departureTimes.length}<br>
+        <strong>Stations:</strong> ${loadedSchedule.stations.length}<br>
+        <strong>Solving time:</strong> 30 seconds per algorithm
     `;
     $('#problemDescription').html(problemDesc);
 
-    // Run each algorithm
-    for (let i = 0; i < algorithms.length; i++) {
-        const algo = algorithms[i];
-        $('#benchmarkProgress').text(`${i}/${algorithms.length} - ${algo.name}`);
-        $('#benchmarkProgressBar').css('width', `${(i / algorithms.length) * 100}%`);
+    // Call backend benchmark endpoint
+    $.ajax({
+        url: '/schedules/benchmark?timeLimit=30',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(loadedSchedule),
+        success: function(response) {
+            // Convert backend response to frontend format
+            benchmarkResults = response.results.map(r => ({
+                algorithm: r.algorithmName,
+                hardScore: r.hardScore,
+                softScore: r.softScore,
+                time: r.timeSeconds,
+                iterations: '-',
+                score: r.score
+            }));
 
-        try {
-            const result = await runSingleBenchmark(algo.id, algo.name);
-            benchmarkResults.push(result);
-        } catch (err) {
-            benchmarkResults.push({
-                algorithm: algo.name,
-                hardScore: 'Error',
-                softScore: 'Error',
-                time: 0,
-                iterations: 0,
-                error: err.message
-            });
+            $('#benchmarkProgress').text('Complete!');
+            $('#benchmarkProgressBar').css('width', '100%');
+            
+            setTimeout(() => {
+                displayBenchmarkResults();
+            }, 500);
+        },
+        error: function(xhr) {
+            $('#benchmarkLoading').hide();
+            showError("Benchmark failed", xhr);
         }
-    }
-
-    // Complete
-    $('#benchmarkProgress').text(`${algorithms.length}/${algorithms.length}`);
-    $('#benchmarkProgressBar').css('width', '100%');
-
-    // Show results
-    setTimeout(() => {
-        displayBenchmarkResults();
-    }, 500);
+    });
 }
+
+
 
 /**
  * Run a single benchmark for one algorithm
@@ -983,11 +983,11 @@ function displayBenchmarkResults() {
         });
 
         $('#benchmarkConclusion').html(`
-            <strong>Labākais algoritms:</strong> ${bestResult.algorithm}<br>
+            <strong>Best algorithm:</strong> ${bestResult.algorithm}<br>
             <strong>Score:</strong> ${bestResult.score}<br>
-            <strong>Secinājums:</strong> ${bestResult.algorithm} sasniedza labāko rezultātu ar hard score ${bestResult.hardScore} 
-            un soft score ${bestResult.softScore} ${bestResult.time} sekundēs.
-            ${bestResult.hardScore < 0 ? '<br><span class="text-warning">⚠️ Piezīme: Negatīvs hard score norāda uz neapmierinātiem ierobežojumiem. Iespējams, nepieciešams vairāk laika vai vilcienu.</span>' : ''}
+            <strong>Conclusion:</strong> ${bestResult.algorithm} achieved the best result with hard score ${bestResult.hardScore} 
+            and soft score ${bestResult.softScore} in ${bestResult.time} seconds.
+            ${bestResult.hardScore < 0 ? '<br><span class="text-warning">⚠️ Note: Negative hard score indicates unsatisfied constraints. More time or more trains may be needed.</span>' : ''}
         `);
     }
 }
@@ -997,7 +997,7 @@ function displayBenchmarkResults() {
  */
 function exportBenchmarkResults() {
     if (benchmarkResults.length === 0) {
-        showError("Eksports neizdevās", { statusText: "Nav benchmark rezultātu" });
+        showError("Export failed", { statusText: "No benchmark results available" });
         return;
     }
 
