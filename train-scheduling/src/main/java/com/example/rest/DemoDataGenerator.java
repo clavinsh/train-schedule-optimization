@@ -75,7 +75,6 @@ public class DemoDataGenerator {
         // Create configuration
         TrainConfiguration configuration = new TrainConfiguration(
                 Duration.ofMinutes(5),  // Minimum 5 minutes between trains
-                Duration.ofMinutes(2),  // 2 minutes station stop
                 60.0                    // 60 km/h average speed
         );
 
@@ -329,14 +328,16 @@ public class DemoDataGenerator {
             // Forward route
             List<Station> forwardStations = getStationsFromIds.apply(stationMap, stationIds);
             routes.add(new Route(nextRouteId.getAndIncrement(),
-                    namePrefix + " (" + forwardStations.get(0).getName() + "-" + forwardStations.get(forwardStations.size() - 1).getName() + ")",
+                    // namePrefix + " (" + forwardStations.get(0).getName() + "-" + forwardStations.get(forwardStations.size() - 1).getName() + ")",
+                    "(" + forwardStations.get(0).getName() + "-" + forwardStations.get(forwardStations.size() - 1).getName() + ")",
                     forwardStations));
 
             // Reverse route
             List<Station> reverseStations = new ArrayList<>(forwardStations);
             Collections.reverse(reverseStations);
             routes.add(new Route(nextRouteId.getAndIncrement(),
-                    namePrefix + " (" + reverseStations.get(0).getName() + "-" + reverseStations.get(reverseStations.size() - 1).getName() + ")",
+                    // namePrefix + " (" + reverseStations.get(0).getName() + "-" + reverseStations.get(reverseStations.size() - 1).getName() + ")",
+                    "(" + reverseStations.get(0).getName() + "-" + reverseStations.get(reverseStations.size() - 1).getName() + ")",
                     reverseStations));
         };
 

@@ -33,7 +33,7 @@ public class TrainScheduleConstraintProvider implements ConstraintProvider {
 
     // Configuration constants (could be moved to TrainConfiguration)
 
-    private static final double UNDERUTILIZATION_THRESHOLD = 0.2;
+    private static final double UNDERUTILIZATION_THRESHOLD = 0.5;
 
     @Override
     public Constraint[] defineConstraints(ConstraintFactory constraintFactory) {

@@ -4,9 +4,7 @@ let autoRefreshIntervalId = null;
 let scheduleId = null;
 let loadedSchedule = null;
 let viewType = "train";
-let selectedAlgorithm = "default";
 let selectedDatasetSize = "default";
-let benchmarkResults = [];
 
 // Timeline configurations
 const timelineOptions = {
@@ -82,18 +80,6 @@ function setupEventHandlers() {
     $("#stopSolvingButton").click(stopSolving);
     $("#analyzeButton").click(analyze);
     $("#exportButton").click(exportScheduleJson);
-    $("#importButton").click(() => $("#importFileInput").click());
-    $("#importFileInput").change(importScheduleJson);
-
-    // Algorithm selection
-    $(".algorithm-option").click(function(e) {
-        e.preventDefault();
-        $(".algorithm-option").removeClass("active");
-        $(this).addClass("active");
-        selectedAlgorithm = $(this).data("algorithm");
-        showSuccess("Algorithm selected", `Selected: ${$(this).text()}`);
-    });
-
     // Dataset size selection
     $(".dataset-option").click(function(e) {
         e.preventDefault();
@@ -102,17 +88,6 @@ function setupEventHandlers() {
         selectedDatasetSize = $(this).data("size");
         loadDataset(selectedDatasetSize);
     });
-
-    // Quick Benchmark button (in-page comparison)
-    $("#runBenchmark").click(function(e) {
-        e.preventDefault();
-        runBenchmark();
-    });
-
-
-
-    // Export benchmark results
-    $("#exportBenchmarkBtn").click(exportBenchmarkResults);
 
     $("#byTrainTab").click(function () {
         viewType = "train";
@@ -457,12 +432,10 @@ function createSuccessBanner(message) {
 }
 
 function solve() {
-    // Include selected algorithm in the request
-    const url = `/schedules?algorithm=${encodeURIComponent(selectedAlgorithm)}`;
-    $.post(url, JSON.stringify(loadedSchedule), function (data) {
+    $.post("/schedules", JSON.stringify(loadedSchedule), function (data) {
         scheduleId = data;
         refreshSolvingButtons(true);
-        showSuccess("Solving started!", `Job ID: ${scheduleId} (Algorithm: ${selectedAlgorithm})`);
+        showSuccess("Solving started!", `Job ID: ${scheduleId}`);
     }).fail(function (xhr, ajaxOptions, thrownError) {
         showError("Start solving failed.", xhr);
         refreshSolvingButtons(false);
@@ -646,39 +619,6 @@ function exportScheduleJson() {
     showSuccess("Exported!", "Schedule JSON downloaded.");
 }
 
-function importScheduleJson(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const schedule = JSON.parse(e.target.result);
-
-            // Basic validation
-            if (!schedule.trains || !schedule.routes || !schedule.routeDepartures) {
-                showError("Import failed", { statusText: "Invalid schedule format. Must contain trains, routes, and routeDepartures." });
-                return;
-            }
-
-            // Reset solver state
-            scheduleId = null;
-            loadedSchedule = schedule;
-
-            // Render the imported schedule
-            renderSchedule(schedule);
-            refreshSolvingButtons(false);
-
-            showSuccess("Imported!", `Loaded ${schedule.routeDepartures.length} departures, ${schedule.trains.length} trains, ${schedule.routes.length} routes.`);
-        } catch (err) {
-            showError("Import failed", { statusText: "Invalid JSON: " + err.message });
-        }
-    };
-    reader.readAsText(file);
-
-    // Reset file input so same file can be re-imported
-    event.target.value = '';
-}
 /**
  * Show trip details in a modal when clicking on a timeline item
  */
@@ -823,211 +763,4 @@ function loadDataset(size) {
     }).fail(function (xhr) {
         showError("Failed to load dataset", xhr);
     });
-}
-
-/**
- * Run benchmark comparing different algorithms using backend endpoint
- */
-async function runBenchmark() {
-    const modal = new bootstrap.Modal(document.getElementById('benchmarkModal'));
-    modal.show();
-
-    // Reset UI
-    $('#benchmarkLoading').show();
-    $('#benchmarkResults').hide();
-    $('#benchmarkProgressBar').css('width', '25%');
-    $('#benchmarkProgress').text('Running benchmark on server...');
-    benchmarkResults = [];
-
-    // Problem description
-    const problemDesc = `
-        <strong>Problem:</strong> Train Schedule Optimization<br>
-        <strong>Trains:</strong> ${loadedSchedule.trains.length}<br>
-        <strong>Routes:</strong> ${loadedSchedule.routes.length}<br>
-        <strong>Trips (planning entities):</strong> ${loadedSchedule.routeDepartures.length}<br>
-        <strong>Stations:</strong> ${loadedSchedule.stations.length}<br>
-        <strong>Solving time:</strong> 30 seconds per algorithm
-    `;
-    $('#problemDescription').html(problemDesc);
-
-    // Call backend benchmark endpoint
-    $.ajax({
-        url: '/schedules/benchmark?timeLimit=30',
-        type: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify(loadedSchedule),
-        success: function(response) {
-            // Convert backend response to frontend format
-            benchmarkResults = response.results.map(r => ({
-                algorithm: r.algorithmName,
-                hardScore: r.hardScore,
-                softScore: r.softScore,
-                time: r.timeSeconds,
-                iterations: '-',
-                score: r.score
-            }));
-
-            $('#benchmarkProgress').text('Complete!');
-            $('#benchmarkProgressBar').css('width', '100%');
-            
-            setTimeout(() => {
-                displayBenchmarkResults();
-            }, 500);
-        },
-        error: function(xhr) {
-            $('#benchmarkLoading').hide();
-            showError("Benchmark failed", xhr);
-        }
-    });
-}
-
-
-
-/**
- * Run a single benchmark for one algorithm
- */
-function runSingleBenchmark(algorithmId, algorithmName) {
-    return new Promise((resolve, reject) => {
-        const startTime = Date.now();
-
-        // Start solving with algorithm parameter
-        $.ajax({
-            url: `/schedules?algorithm=${algorithmId}`,
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify(loadedSchedule),
-            success: function(jobId) {
-                // Wait for solving to complete (max 35 seconds)
-                let checkCount = 0;
-                const maxChecks = 70; // 35 seconds with 500ms intervals
-
-                const checkStatus = setInterval(() => {
-                    checkCount++;
-
-                    $.getJSON(`/schedules/${jobId}`, function(result) {
-                        if (result.solverStatus === 'NOT_SOLVING' || checkCount >= maxChecks) {
-                            clearInterval(checkStatus);
-                            const endTime = Date.now();
-
-                            // Parse score
-                            let hardScore = 0, softScore = 0;
-                            if (result.score) {
-                                const match = result.score.match(/(-?\d+)hard\/(-?\d+)soft/);
-                                if (match) {
-                                    hardScore = parseInt(match[1]);
-                                    softScore = parseInt(match[2]);
-                                }
-                            }
-
-                            // Stop solving if still running
-                            if (result.solverStatus !== 'NOT_SOLVING') {
-                                $.delete(`/schedules/${jobId}`);
-                            }
-
-                            resolve({
-                                algorithm: algorithmName,
-                                hardScore: hardScore,
-                                softScore: softScore,
-                                time: ((endTime - startTime) / 1000).toFixed(1),
-                                iterations: checkCount,
-                                score: result.score
-                            });
-                        }
-                    }).fail(() => {
-                        clearInterval(checkStatus);
-                        reject(new Error('Failed to get solver status'));
-                    });
-                }, 500);
-            },
-            error: function(xhr) {
-                reject(new Error(xhr.statusText));
-            }
-        });
-    });
-}
-
-/**
- * Display benchmark results in table
- */
-function displayBenchmarkResults() {
-    $('#benchmarkLoading').hide();
-    $('#benchmarkResults').show();
-
-    const tbody = $('#benchmarkTableBody');
-    tbody.empty();
-
-    // Find best results
-    let bestHard = Math.max(...benchmarkResults.filter(r => typeof r.hardScore === 'number').map(r => r.hardScore));
-    let bestSoft = Math.max(...benchmarkResults.filter(r => typeof r.softScore === 'number').map(r => r.softScore));
-
-    benchmarkResults.forEach(result => {
-        const isError = result.error;
-        const isBestHard = result.hardScore === bestHard && typeof result.hardScore === 'number';
-        const isBestSoft = result.softScore === bestSoft && typeof result.softScore === 'number';
-
-        const hardClass = isBestHard ? 'text-success fw-bold' : (result.hardScore < 0 ? 'text-danger' : '');
-        const softClass = isBestSoft ? 'text-success fw-bold' : '';
-
-        tbody.append(`
-            <tr class="${isError ? 'table-danger' : ''}">
-                <td><i class="fas fa-cog me-1"></i>${result.algorithm}</td>
-                <td class="text-center ${hardClass}">${result.hardScore}${isBestHard ? ' ⭐' : ''}</td>
-                <td class="text-center ${softClass}">${result.softScore}${isBestSoft ? ' ⭐' : ''}</td>
-                <td class="text-center">${result.time}s</td>
-                <td class="text-center">${result.iterations}</td>
-            </tr>
-        `);
-    });
-
-    // Generate conclusion
-    const validResults = benchmarkResults.filter(r => typeof r.hardScore === 'number');
-    if (validResults.length > 0) {
-        const bestResult = validResults.reduce((a, b) => {
-            if (a.hardScore !== b.hardScore) return a.hardScore > b.hardScore ? a : b;
-            return a.softScore > b.softScore ? a : b;
-        });
-
-        $('#benchmarkConclusion').html(`
-            <strong>Best algorithm:</strong> ${bestResult.algorithm}<br>
-            <strong>Score:</strong> ${bestResult.score}<br>
-            <strong>Conclusion:</strong> ${bestResult.algorithm} achieved the best result with hard score ${bestResult.hardScore} 
-            and soft score ${bestResult.softScore} in ${bestResult.time} seconds.
-            ${bestResult.hardScore < 0 ? '<br><span class="text-warning">⚠️ Note: Negative hard score indicates unsatisfied constraints. More time or more trains may be needed.</span>' : ''}
-        `);
-    }
-}
-
-/**
- * Export benchmark results as JSON
- */
-function exportBenchmarkResults() {
-    if (benchmarkResults.length === 0) {
-        showError("Export failed", { statusText: "No benchmark results available" });
-        return;
-    }
-
-    const exportData = {
-        timestamp: new Date().toISOString(),
-        problem: {
-            trains: loadedSchedule.trains.length,
-            routes: loadedSchedule.routes.length,
-            departures: loadedSchedule.routeDepartures.length,
-            stations: loadedSchedule.stations.length
-        },
-        results: benchmarkResults
-    };
-
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `benchmark-results-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    showSuccess("Eksportēts!", "Benchmark rezultāti saglabāti.");
 }

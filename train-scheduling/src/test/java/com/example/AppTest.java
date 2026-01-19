@@ -6,6 +6,7 @@ import com.example.domain.RollingStockSchedule;
 import com.example.rest.DemoDataGenerator;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
@@ -23,16 +24,17 @@ public class AppTest {
     @Inject
     DemoDataGenerator demoDataGenerator;
 
+    // Launches the solver on the supplied generator data set - so as to quickly iterate in the
+    // terminal without the need of a web GUI
     @Test
+    @Disabled("Only used manually for testing the solver in CLI")
     public void solveDemoData() throws InterruptedException, ExecutionException {
         RollingStockSchedule problem = demoDataGenerator.generateSmallDataset();
         DemoDataGenerator.printGeneratedData(problem);
-        // A specific problemId is recommended for a typical real-time planning schedule
         UUID problemId = UUID.randomUUID();
 
-        // Solve the problem with the Timefold solver
-        RollingStockSchedule solution = solverManager.solve(problemId, problem)
-                .getFinalBestSolution();
+        RollingStockSchedule solution =
+                solverManager.solve(problemId, problem).getFinalBestSolution();
 
         assertNotNull(solution);
         assertNotNull(solution.getScore());

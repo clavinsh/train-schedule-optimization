@@ -17,7 +17,7 @@
                 <constraintProviderClass>com.example.solver.TrainScheduleConstraintProvider</constraintProviderClass>
             </scoreDirectorFactory>
             <termination>
-                <secondsSpentLimit>30</secondsSpentLimit>
+                <secondsSpentLimit>60</secondsSpentLimit>
             </termination>
             <constructionHeuristic>
                 <constructionHeuristicType>FIRST_FIT_DECREASING</constructionHeuristicType>
@@ -34,15 +34,12 @@
         <name>Hill Climbing</name>
         <solver>
             <localSearch>
-                <unionMoveSelector>
-                    <changeMoveSelector/>
-                    <swapMoveSelector/>
-                </unionMoveSelector>
+                <changeMoveSelector/>
                 <acceptor>
-                    <lateAcceptanceSize>1</lateAcceptanceSize>
+                  <acceptorType>HILL_CLIMBING</acceptorType>
                 </acceptor>
                 <forager>
-                    <acceptedCountLimit>4</acceptedCountLimit>
+                  <acceptedCountLimit>1</acceptedCountLimit>
                 </forager>
             </localSearch>
         </solver>
@@ -53,10 +50,7 @@
         <name>Tabu Search</name>
         <solver>
             <localSearch>
-                <unionMoveSelector>
-                    <changeMoveSelector/>
-                    <swapMoveSelector/>
-                </unionMoveSelector>
+                <changeMoveSelector/>
                 <acceptor>
                     <entityTabuSize>7</entityTabuSize>
                 </acceptor>
@@ -72,15 +66,12 @@
         <name>Late Acceptance</name>
         <solver>
             <localSearch>
-                <unionMoveSelector>
-                    <changeMoveSelector/>
-                    <swapMoveSelector/>
-                </unionMoveSelector>
+                <changeMoveSelector/>
                 <acceptor>
                     <lateAcceptanceSize>400</lateAcceptanceSize>
                 </acceptor>
                 <forager>
-                    <acceptedCountLimit>4</acceptedCountLimit>
+                    <acceptedCountLimit>1</acceptedCountLimit>
                 </forager>
             </localSearch>
         </solver>
@@ -91,12 +82,9 @@
         <name>Simulated Annealing</name>
         <solver>
             <localSearch>
-                <unionMoveSelector>
-                    <changeMoveSelector/>
-                    <swapMoveSelector/>
-                </unionMoveSelector>
+                <changeMoveSelector/>
                 <acceptor>
-                    <simulatedAnnealingStartingTemperature>0hard/500soft</simulatedAnnealingStartingTemperature>
+                    <simulatedAnnealingStartingTemperature>5hard/500soft</simulatedAnnealingStartingTemperature>
                 </acceptor>
                 <forager>
                     <acceptedCountLimit>4</acceptedCountLimit>

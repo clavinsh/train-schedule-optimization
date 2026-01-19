@@ -16,9 +16,6 @@ public class TrainConfiguration {
     // Minimum time interval between two trains going to the same station
     private Duration minIntervalBetweenTrains;
 
-    // How long a train stops at each station
-    private Duration stationStopDuration;
-
     // Average train speed in km/h (used to calculate travel time between stations)
     private double averageSpeedKmPerHour;
 
