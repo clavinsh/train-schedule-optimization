@@ -1,52 +1,73 @@
 package com.example.domain;
 
 import java.time.LocalTime;
-import ai.timefold.solver.core.api.domain.lookup.PlanningId;
+import java.time.temporal.ChronoUnit;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Represents passenger demand (embark & disembark) for a specific station on a specific route for a
- * specific hour of the day
- */
-@Setter @Getter @AllArgsConstructor @NoArgsConstructor
+@Setter
+@Getter
+@AllArgsConstructor
+@NoArgsConstructor
 public class StationDemand {
-    @PlanningId
-    private Long id;
+    private int id;
     private Station station;
-    private Route route;
-    private LocalTime time;
+    private Direction direction;
 
-    private int embarkingPassengers;
-    private int disembarkingPassengers;
+    // time window of passenger demand
+    private LocalTime hourStart;
+    private LocalTime hourEnd;
 
-    // Simulates passenger gradual arrival throughout the hour
-    // At minute 0: 0 passengers have arrived at the station
-    // At minute 30: half have arrived
-    // At minute 59: all passengers
-    public int getEmbarkingPassengers(LocalTime arrivalTime) {
-        return lerpPassengersOnTime(arrivalTime, embarkingPassengers);
+    private int passengersPerHour;
+
+    /**
+     * Get accumulated passengers at a specific time using linear interpolation.
+     * For example, if passengersPerHour is 150 and time is 30 minutes into the hour,
+     * returns 75.
+     */
+    public double getAccumulatedPassengersAt(LocalTime time) {
+        if (time.isBefore(hourStart)) {
+            return 0;
+        }
+        if (!time.isBefore(hourEnd)) {
+            return passengersPerHour;
+        }
+
+        long minutesIntoWindow = ChronoUnit.MINUTES.between(hourStart, time);
+        long windowDurationMinutes = ChronoUnit.MINUTES.between(hourStart, hourEnd);
+
+        if (windowDurationMinutes <= 0) {
+            return passengersPerHour;
+        }
+
+        return passengersPerHour * ((double) minutesIntoWindow / windowDurationMinutes);
     }
 
-    // Simulates passenger gradual arrival throughout the hour
-    // At minute 0: 0 passengers have arrived at the station
-    // At minute 30: half have arrived
-    // At minute 59: all passengers
-    public int getDisembarkingPassengers(LocalTime arrivalTime) {
-        return lerpPassengersOnTime(arrivalTime, disembarkingPassengers);
-    }
-
-    // Linear interpolation (LERP) for passengers based on arrival time (minutes)
-    private int lerpPassengersOnTime(LocalTime arrivalTime, int passengers) {
-        // Incorrect hour
-        if (arrivalTime.getHour() != time.getHour()) {
+    /**
+     * Get passengers that arrived between two times within this demand window.
+     */
+    public double getPassengersBetween(LocalTime from, LocalTime to) {
+        if (to.isBefore(hourStart) || from.isAfter(hourEnd) || !from.isBefore(to)) {
             return 0;
         }
 
-        int arrivalMinutes = arrivalTime.getMinute();
+        LocalTime effectiveFrom = from.isBefore(hourStart) ? hourStart : from;
+        LocalTime effectiveTo = to.isAfter(hourEnd) ? hourEnd : to;
 
-        return (int) Math.round(passengers * (1 + arrivalMinutes) / 60.0);
+        return getAccumulatedPassengersAt(effectiveTo) - getAccumulatedPassengersAt(effectiveFrom);
+    }
+
+    /**
+     * Get the arrival rate per minute.
+     */
+    public double getArrivalRatePerMinute() {
+        long windowDurationMinutes = ChronoUnit.MINUTES.between(hourStart, hourEnd);
+        if (windowDurationMinutes <= 0) {
+            return 0;
+        }
+        return (double) passengersPerHour / windowDurationMinutes;
     }
 }

@@ -6,7 +6,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
-import com.example.domain.RollingStockSchedule;
+import com.example.domain.TrainSchedule;
 
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
@@ -26,10 +26,10 @@ public class DemoDataResource {
     @APIResponses(value = {
             @APIResponse(responseCode = "200", description = "Demo schedule data",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                            schema = @Schema(implementation = RollingStockSchedule.class)))})
+                            schema = @Schema(implementation = TrainSchedule.class)))})
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    public RollingStockSchedule getDemoData() {
+    public TrainSchedule getDemoData() {
         return demoDataGenerator.generateDemoData();
     }
 }

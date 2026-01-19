@@ -1,10 +1,9 @@
 package com.example.rest;
 
 import ai.timefold.solver.core.api.score.analysis.ScoreAnalysis;
-import ai.timefold.solver.core.api.score.buildin.hardsoft.HardSoftScore;
+import ai.timefold.solver.core.api.score.buildin.hardmediumsoft.HardMediumSoftScore;
 import ai.timefold.solver.core.api.solver.ScoreAnalysisFetchPolicy;
 import ai.timefold.solver.core.api.solver.SolutionManager;
-import ai.timefold.solver.core.api.solver.SolverJobBuilder;
 import ai.timefold.solver.core.api.solver.SolverManager;
 import ai.timefold.solver.core.api.solver.SolverStatus;
 import jakarta.inject.Inject;
@@ -20,7 +19,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-import com.example.domain.RollingStockSchedule;
+import com.example.domain.TrainSchedule;
 import com.example.rest.exception.ErrorInfo;
 import com.example.rest.exception.ScheduleSolverException;
 
@@ -48,13 +47,13 @@ public class TrainSchedulingResource {
     private static final Logger LOGGER = LoggerFactory.getLogger(TrainSchedulingResource.class);
 
     @Inject
-    SolverManager<RollingStockSchedule, String> solverManager;
+    SolverManager<TrainSchedule, String> solverManager;
 
     @Inject
-    SolutionManager<RollingStockSchedule, HardSoftScore> solutionManager;
+    SolutionManager<TrainSchedule, HardMediumSoftScore> solutionManager;
 
     // In-memory storage for schedules (in production, use a database)
-    private final ConcurrentMap<String, RollingStockSchedule> scheduleMap =
+    private final ConcurrentMap<String, TrainSchedule> scheduleMap =
             new ConcurrentHashMap<>();
 
     @Operation(summary = "List all schedule job IDs")
@@ -72,16 +71,16 @@ public class TrainSchedulingResource {
     @APIResponses(value = {
             @APIResponse(responseCode = "200", description = "The schedule",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                            schema = @Schema(implementation = RollingStockSchedule.class))),
+                            schema = @Schema(implementation = TrainSchedule.class))),
             @APIResponse(responseCode = "404", description = "Schedule not found",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON,
                             schema = @Schema(implementation = ErrorInfo.class)))})
     @GET
     @Path("{jobId}")
     @Produces(MediaType.APPLICATION_JSON)
-    public RollingStockSchedule getSchedule(
+    public TrainSchedule getSchedule(
             @Parameter(description = "The job ID") @PathParam("jobId") String jobId) {
-        RollingStockSchedule schedule = scheduleMap.get(jobId);
+        TrainSchedule schedule = scheduleMap.get(jobId);
         if (schedule == null) {
             throw new ScheduleSolverException(jobId,
                     "Schedule with jobId '" + jobId + "' not found.");
@@ -111,10 +110,10 @@ public class TrainSchedulingResource {
     @GET
     @Path("{jobId}/score-analysis")
     @Produces(MediaType.APPLICATION_JSON)
-    public ScoreAnalysis<HardSoftScore> getScoreAnalysis(
+    public ScoreAnalysis<HardMediumSoftScore> getScoreAnalysis(
             @Parameter(description = "The job ID") @PathParam("jobId") String jobId,
             @QueryParam("fetchPolicy") ScoreAnalysisFetchPolicy fetchPolicy) {
-        RollingStockSchedule schedule = getSchedule(jobId);
+        TrainSchedule schedule = getSchedule(jobId);
         if (fetchPolicy == null) {
             fetchPolicy = ScoreAnalysisFetchPolicy.FETCH_ALL;
         }
@@ -127,7 +126,7 @@ public class TrainSchedulingResource {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.TEXT_PLAIN)
-    public String solve(RollingStockSchedule schedule) {
+    public String solve(TrainSchedule schedule) {
         String jobId = UUID.randomUUID().toString();
         scheduleMap.put(jobId, schedule);
 
@@ -147,7 +146,7 @@ public class TrainSchedulingResource {
     @Path("{jobId}")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response update(@Parameter(description = "The job ID") @PathParam("jobId") String jobId,
-            RollingStockSchedule schedule) {
+            TrainSchedule schedule) {
         if (!scheduleMap.containsKey(jobId)) {
             throw new ScheduleSolverException(jobId,
                     "Schedule with jobId '" + jobId + "' not found.");
