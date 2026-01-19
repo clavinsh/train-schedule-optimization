@@ -46,6 +46,6 @@ abstract class BaseConstraintTest {
         depoA = new Depo(1L, stationA, 5);
         depoB = new Depo(2L, stationB, 3);
 
-        config = new TrainConfiguration(Duration.ofMinutes(5), Duration.ofMinutes(2), 60.0);
+        config = new TrainConfiguration(Duration.ofMinutes(5), 60.0);
     }
 }

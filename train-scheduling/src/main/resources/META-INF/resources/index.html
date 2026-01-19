@@ -217,14 +217,6 @@
         .dropdown-menu-dark .dropdown-item.active {
             background-color: var(--ts-violet-1-rgb);
         }
-
-        /* Benchmark modal styling */
-        #benchmarkModal .progress {
-            background-color: #343a40;
-        }
-        #benchmarkModal .table-dark {
-            --bs-table-bg: #212529;
-        }
     </style>
 </head>
 
@@ -323,22 +315,7 @@
                     <span class="fas fa-upload"></span> Import JSON
                 </button>
                 <input type="file" id="importFileInput" accept=".json" style="display: none;">
-                
-                <!-- Algorithm Selection Dropdown -->
-                <div class="dropdown me-2">
-                    <button class="btn btn-outline-info dropdown-toggle" type="button" id="algorithmDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                        <span class="fas fa-cog"></span> Algorithm
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="algorithmDropdown">
-                        <li><a class="dropdown-item algorithm-option active" href="#" data-algorithm="default">Default (Hill Climbing)</a></li>
-                        <li><a class="dropdown-item algorithm-option" href="#" data-algorithm="tabu">Tabu Search</a></li>
-                        <li><a class="dropdown-item algorithm-option" href="#" data-algorithm="late-acceptance">Late Acceptance</a></li>
-                        <li><a class="dropdown-item algorithm-option" href="#" data-algorithm="simulated-annealing">Simulated Annealing</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="#" id="runBenchmark"><i class="fas fa-chart-line me-1"></i> Quick Benchmark</a></li>
-                    </ul>
-                </div>
-                
+
                 <!-- Dataset Size Dropdown -->
                 <div class="dropdown me-2">
                     <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="datasetDropdown" data-bs-toggle="dropdown" aria-expanded="false">
@@ -491,57 +468,6 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" id="tripDetailsModalContent">
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Benchmark Results Modal -->
-    <div class="modal fade" id="benchmarkModal" tabindex="-1" aria-labelledby="benchmarkModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content bg-dark text-white">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title" id="benchmarkModalLabel">
-                        <i class="fas fa-chart-line me-2"></i>Benchmark Results
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body" id="benchmarkModalContent">
-                    <div class="text-center py-4" id="benchmarkLoading">
-                        <i class="fas fa-spinner fa-spin fa-3x mb-3"></i>
-                        <p>Running benchmark tests... <span id="benchmarkProgress">0/4</span></p>
-                        <div class="progress" style="height: 20px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" id="benchmarkProgressBar" style="width: 0%"></div>
-                        </div>
-                    </div>
-                    <div id="benchmarkResults" style="display: none;">
-                        <h6><i class="fas fa-info-circle me-1"></i> Problem Description</h6>
-                        <div class="alert alert-info mb-3" id="problemDescription"></div>
-                        
-                        <h6><i class="fas fa-table me-1"></i> Algorithm Comparison</h6>
-                        <table class="table table-dark table-striped table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Algorithm</th>
-                                    <th class="text-center">Hard Score</th>
-                                    <th class="text-center">Soft Score</th>
-                                    <th class="text-center">Time (s)</th>
-                                    <th class="text-center">Iterations</th>
-                                </tr>
-                            </thead>
-                            <tbody id="benchmarkTableBody">
-                            </tbody>
-                        </table>
-                        
-                        <h6 class="mt-4"><i class="fas fa-lightbulb me-1"></i> Conclusions</h6>
-                        <div class="alert alert-success" id="benchmarkConclusion"></div>
-                    </div>
-                </div>
-                <div class="modal-footer border-secondary">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" id="exportBenchmarkBtn">
-                        <i class="fas fa-download me-1"></i> Export Results
-                    </button>
                 </div>
             </div>
         </div>
