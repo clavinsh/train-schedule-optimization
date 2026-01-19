@@ -17,7 +17,7 @@
                 <constraintProviderClass>com.example.solver.TrainScheduleConstraintProvider</constraintProviderClass>
             </scoreDirectorFactory>
             <termination>
-                <secondsSpentLimit>30</secondsSpentLimit>
+                <secondsSpentLimit>1</secondsSpentLimit>
             </termination>
             <constructionHeuristic>
                 <constructionHeuristicType>FIRST_FIT_DECREASING</constructionHeuristicType>

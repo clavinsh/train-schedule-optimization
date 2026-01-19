@@ -16,7 +16,6 @@
     <!-- Construction Heuristic: build initial solution - no time limit to ensure all entities are initialized -->
     <constructionHeuristic>
         <constructionHeuristicType>FIRST_FIT_DECREASING</constructionHeuristicType>
-        <!-- No termination for CH - let it finish -->
     </constructionHeuristic>
 
     <localSearch>

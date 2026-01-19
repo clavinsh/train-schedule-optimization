@@ -51,7 +51,7 @@ public class BenchmarkRunner {
 
         // Run benchmark using XML configuration
         System.out.println("Starting benchmark... This may take several minutes.");
-        System.out.println("Each algorithm will run for 30 seconds after 10 second warmup.");
+        // System.out.println("Each algorithm will run for 30 seconds after 10 second warmup.");
         System.out.println();
 
         PlannerBenchmarkFactory benchmarkFactory = PlannerBenchmarkFactory
