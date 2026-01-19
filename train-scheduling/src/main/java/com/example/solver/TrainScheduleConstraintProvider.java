@@ -1,6 +1,7 @@
 package com.example.solver;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
@@ -8,6 +9,7 @@ import java.util.Set;
 import com.example.domain.Connection;
 import com.example.domain.ScheduledTrip;
 import com.example.domain.Station;
+import com.example.domain.StationDemand;
 import com.example.domain.TrackOccupancy;
 
 import ai.timefold.solver.core.api.score.buildin.hardmediumsoft.HardMediumSoftScore;
@@ -40,6 +42,8 @@ public class TrainScheduleConstraintProvider implements ConstraintProvider {
                 preferEvenHeadways(constraintFactory),
                 minimizeTrainIdleTime(constraintFactory),
                 balanceTrainUtilization(constraintFactory),
+                minimizeDeadheadTravel(constraintFactory),
+                serveHighDemandPeriods(constraintFactory)
                 // preferRoundDepartureTimes(constraintFactory)
         };
     }
@@ -275,6 +279,71 @@ public class TrainScheduleConstraintProvider implements ConstraintProvider {
                 })
                 .penalize(HardMediumSoftScore.ONE_SOFT)
                 .asConstraint("Prefer round departure times");
+    }
+
+    /**
+     * Minimize deadhead (empty) train movements.
+     * Penalizes when a train ends one trip at station A and starts the next trip at station B,
+     * requiring the train to reposition without passengers.
+     */
+    protected Constraint minimizeDeadheadTravel(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(ScheduledTrip.class)
+                .filter(trip -> trip.getDepartureTime() != null && trip.getAssignedTrain() != null
+                        && trip.getRoute() != null)
+                .join(ScheduledTrip.class,
+                        Joiners.equal(ScheduledTrip::getAssignedTrain),
+                        Joiners.lessThan(ScheduledTrip::getDepartureTime))
+                .filter((t1, t2) -> t2.getDepartureTime() != null && t2.getRoute() != null)
+                // Only consider consecutive trips for same train
+                .ifNotExists(ScheduledTrip.class,
+                        Joiners.equal((t1, t2) -> t1.getAssignedTrain(), ScheduledTrip::getAssignedTrain),
+                        Joiners.greaterThan((t1, t2) -> t1.getDepartureTime(), ScheduledTrip::getDepartureTime),
+                        Joiners.lessThan((t1, t2) -> t2.getDepartureTime(), ScheduledTrip::getDepartureTime))
+                .filter((t1, t2) -> {
+                    // Check if the ending station of t1 differs from the starting station of t2
+                    Station endOfT1 = t1.getRoute().getLastStop(t1.getDirection());
+                    Station startOfT2 = t2.getRoute().getFirstStop(t2.getDirection());
+                    return endOfT1 != null && startOfT2 != null && !endOfT1.equals(startOfT2);
+                })
+                .penalize(HardMediumSoftScore.ONE_SOFT,
+                        (t1, t2) -> {
+                            // Weight penalty by estimated repositioning time
+                            // For simplicity, use a fixed penalty per deadhead movement
+                            // Could be enhanced to compute actual travel time between stations
+                            return 50; // Significant penalty for each empty repositioning
+                        })
+                .asConstraint("Minimize deadhead travel");
+    }
+
+    /**
+     * Reward trips that serve stations during high-demand periods.
+     * Uses StationDemand data to encourage service when passengers need it most.
+     */
+    protected Constraint serveHighDemandPeriods(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(ScheduledTrip.class)
+                .filter(trip -> trip.getDepartureTime() != null && trip.getAssignedTrain() != null
+                        && trip.getRoute() != null)
+                .join(StationDemand.class)
+                .filter((trip, demand) -> {
+                    // Check if trip serves this station in the matching direction
+                    List<Station> stops = trip.getRoute().getStopsInDirection(trip.getDirection());
+                    return demand.getStation() != null
+                            && demand.getDirection() == trip.getDirection()
+                            && stops.contains(demand.getStation());
+                })
+                .filter((trip, demand) -> {
+                    // Check if trip time falls within or near the demand window
+                    LocalTime tripTime = trip.getDepartureTime().toLocalTime();
+                    return !tripTime.isBefore(demand.getHourStart())
+                            && !tripTime.isAfter(demand.getHourEnd());
+                })
+                .reward(HardMediumSoftScore.ONE_SOFT,
+                        (trip, demand) -> {
+                            // Reward proportional to passenger demand rate
+                            // Higher passengersPerHour = more reward for serving that period
+                            return demand.getPassengersPerHour() / 10;
+                        })
+                .asConstraint("Serve high demand periods");
     }
 
     // ========== HELPER METHODS ==========
