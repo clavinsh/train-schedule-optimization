@@ -19,21 +19,15 @@
         <!-- No termination for CH - let it finish -->
     </constructionHeuristic>
 
-    <!-- Local Search: use Late Acceptance with change and swap moves -->
     <localSearch>
-        <unionMoveSelector>
-            <changeMoveSelector/>
-            <swapMoveSelector/>
-        </unionMoveSelector>
+        <changeMoveSelector/>
 
-        <!-- Late Acceptance: good balance of exploration vs exploitation -->
         <acceptor>
             <lateAcceptanceSize>400</lateAcceptanceSize>
         </acceptor>
 
-        <!-- Forager: pick first accepted move after evaluating a few -->
         <forager>
-            <acceptedCountLimit>4</acceptedCountLimit>
+            <acceptedCountLimit>1</acceptedCountLimit>
         </forager>
     </localSearch>
 </solver>
