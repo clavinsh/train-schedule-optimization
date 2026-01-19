@@ -1,14 +1,11 @@
 package com.example.solver;
 
 import java.time.Duration;
-import java.time.LocalTime;
-import java.util.List;
-import com.example.domain.DepartureTime;
-import com.example.domain.Depo;
+
+import com.example.domain.RouteDeparture;
 import com.example.domain.Station;
-import com.example.domain.StationDemand;
-import com.example.domain.Train;
 import com.example.domain.TrainDepoAssignment;
+
 import ai.timefold.solver.core.api.score.buildin.hardsoft.HardSoftScore;
 import ai.timefold.solver.core.api.score.stream.Constraint;
 import ai.timefold.solver.core.api.score.stream.ConstraintFactory;
@@ -17,468 +14,237 @@ import ai.timefold.solver.core.api.score.stream.Joiners;
 
 /**
  * {@link ConstraintProvider} for the Train Schedule Optimization problem.
- * This class defines all the hard and soft constraints that guide the Timefold solver
- * in finding an optimal train schedule.
- * <p>
+ *
+ * This class defines constraints for scheduling train trips (RouteDeparture entities).
+ * Each RouteDeparture represents a complete trip running a route from start to end.
+ * The solver assigns:
+ * - Which train runs each trip
+ * - What time the trip departs from the first station
+ *
  * Constraints are categorized into:
- * <ul>
- *     <li><b>Hard Constraints:</b> Must never be violated. Violations result in an infeasible solution.</li>
- *     <li><b>Soft Constraints:</b> Should be optimized as much as possible. Violations reduce the quality
- *         of the solution but do not make it infeasible.</li>
- * </ul>
- * <p>
- * The constraints are implemented using the Timefold Constraint Streams API.
+ * - Hard Constraints: Must never be violated for a feasible solution
+ * - Soft Constraints: Optimize solution quality
  */
 public class TrainScheduleConstraintProvider implements ConstraintProvider {
+
+    // Configuration constants (could be moved to TrainConfiguration)
+    private static final int MIN_INTERVAL_MINUTES = 5;
+    private static final double UNDERUTILIZATION_THRESHOLD = 0.2;
 
     @Override
     public Constraint[] defineConstraints(ConstraintFactory constraintFactory) {
         return new Constraint[] {
-                // Hard constraints: These constraints MUST NOT be violated for a solution to be feasible.
-                // Each violation of a hard constraint adds a penalty that makes the solution less desirable.
-                trainMustBeAssigned(constraintFactory),
-                timeMustBeAssigned(constraintFactory),
-                trainCapacityNotExceeded(constraintFactory),
-                trainEndsAtDepo(constraintFactory),
-                trainStartsAtDepo(constraintFactory),
-                minIntervalBetweenTrains(constraintFactory),
-                trainRouteConsistency(constraintFactory),
-                trainContinuity(constraintFactory),
+                // Hard constraints
+                trainEndsAtDepo(constraintFactory), 
+                trainStartsAtDepo(constraintFactory), 
+                noOverlappingTrips(constraintFactory), 
+                trainContinuity(constraintFactory), 
+                minIntervalBetweenDepartures(constraintFactory), 
+                trainCapacityNotExceeded(constraintFactory), 
 
-                // Soft constraints: These constraints represent preferences; violating them reduces
-                // the quality of the solution but does not make it infeasible. The solver tries
-                // to minimize penalties from soft constraints to find the best possible solution.
+                // Soft constraints
                 maximizePassengerPickup(constraintFactory),
-                minimizeEmptyTrainTrips(constraintFactory),
-                preferOnTimeArrivals(constraintFactory)
+                minimizeUnderutilizedTrips(constraintFactory)
         };
     }
 
-    // ========== HARD CONSTRAINTS: Ensure feasibility of the schedule ==========
+    // ========== HARD CONSTRAINTS ==========
 
     /**
-     * **Hard Constraint:** A train must be assigned to every scheduled departure time.
-     * This constraint ensures that no {@link DepartureTime} planning entity is left
-     * unassigned to a {@link Train}.
-     * <p>
-     * **Justification:** An unassigned departure time represents an infeasible schedule,
-     * as a departure cannot occur without a physical train.
-     * </p>
-     * **Scoring:** Penalizes {@code 1 Hard} for each {@code DepartureTime} that does not have a {@code Train} assigned.
+     * Hard Constraint: The first trip of a train must start at its assigned depot.
      *
-     * @param constraintFactory The {@link ConstraintFactory} to build the constraint.
-     * @return A {@link Constraint} ensuring all departures have an assigned train.
-     */
-    protected Constraint trainMustBeAssigned(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(DepartureTime.class)
-                .filter(departure -> departure.getTrain() == null) // Find every DepartureTime that lacks a Train.
-                .penalize(HardSoftScore.ONE_HARD) // Apply a hard penalty for each such occurrence.
-                .asConstraint("Train must be assigned");
-    }
-
-    /**
-     * **Hard Constraint:** A departure time must be assigned to every scheduled departure.
-     * This constraint ensures that every {@link DepartureTime} planning entity has a
-     * concrete departure time ({@link LocalTime}) assigned.
-     * <p>
-     * **Justification:** A departure cannot be scheduled without a specific time.
-     * </p>
-     * **Scoring:** Penalizes {@code 1 Hard} for each {@code DepartureTime} that does not have a {@code LocalTime} assigned.
-     *
-     * @param constraintFactory The {@link ConstraintFactory} to build the constraint.
-     * @return A {@link Constraint} ensuring all departures have a specific time assigned.
-     */
-    protected Constraint timeMustBeAssigned(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(DepartureTime.class)
-                .filter(departure -> departure.getDepartureTime() == null) // Find every DepartureTime that lacks a specific departure time.
-                .penalize(HardSoftScore.ONE_HARD) // Apply a hard penalty for each such occurrence.
-                .asConstraint("Departure time must be assigned");
-    }
-
-    /**
-     * **Hard Constraint:** A train's passenger capacity must not be exceeded at its departure station.
-     * This constraint ensures that the number of embarking passengers at a train's departure station
-     * does not exceed the {@link Train}'s maximum capacity.
-     * <p>
-     * **Implementation Detail:** This check is a simplification. It only considers the demand at
-     * the departure station at the departure hour. A more complex model would track passenger
-     * load throughout the entire route, accounting for passengers disembarking at intermediate stations.
-     * </p>
-     * **Scoring:** Penalizes {@code 1 Hard} for each passenger exceeding the train's capacity
-     * at the departure station.
-     *
-     * @param constraintFactory The {@link ConstraintFactory} to build the constraint.
-     * @return A {@link Constraint} ensuring trains do not exceed their capacity at departure.
-     */
-    protected Constraint trainCapacityNotExceeded(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(DepartureTime.class)
-                .filter(departure -> departure.getTrain() != null && departure.getDepartureTime() != null)
-                .join(StationDemand.class,
-                        Joiners.equal(DepartureTime::getStation, StationDemand::getStation), // Match by station
-                        Joiners.equal(DepartureTime::getRoute, StationDemand::getRoute),     // Match by route
-                        // Filter to match demand within the same hour as the departure
-                        Joiners.filtering((departure, demand) ->
-                                departure.getDepartureTime().getHour() == demand.getTime().getHour()))
-                // Only consider cases where embarking passengers exceed train capacity
-                .filter((departure, demand) -> demand.getEmbarkingPassengers() > departure.getTrain().getCapacity())
-                // Penalize by the number of passengers exceeding capacity
-                .penalize(HardSoftScore.ONE_HARD,
-                        (departure, demand) -> demand.getEmbarkingPassengers() - departure.getTrain().getCapacity())
-                .asConstraint("Train capacity not exceeded");
-    }
-
-    /**
-     * **Hard Constraint:** The last trip of a {@link Train} for the day must terminate at its assigned depot.
-     * This constraint ensures that trains are properly garaged at their designated {@link Depo} at the
-     * end of their daily schedule.
-     * <p>
-     * **Implementation Detail:**
-     * 1. It iterates through all {@link DepartureTime} instances.
-     * 2. It uses `ifNotExists` to identify, for each train, the {@code DepartureTime} that represents
-     *    its *last* trip of the day (i.e., there is no other trip for the same train with a later departure time).
-     * 3. It then joins with {@link TrainDepoAssignment} to find the depot assigned to that specific train.
-     * 4. Finally, it filters for cases where the last station of the trip's {@link Route}
-     *    does *not* match the train's assigned depot station.
-     * </p>
-     * **Scoring:** Penalizes {@code 1 Hard} for each train whose last trip does not end at its assigned depot.
-     *
-     * @param constraintFactory The {@link ConstraintFactory} to build the constraint.
-     * @return A {@link Constraint} ensuring trains end their day at their assigned depot.
-     */
-    protected Constraint trainEndsAtDepo(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(DepartureTime.class)
-                .filter(departure -> departure.getTrain() != null
-                        && departure.getDepartureTime() != null
-                        && departure.getRoute() != null)
-                // Filter for the *last* trip of the day for each train:
-                // only penalize if there's no later trip for this train
-                .ifNotExists(DepartureTime.class,
-                        Joiners.equal(DepartureTime::getTrain), // Same train
-                        Joiners.greaterThan(DepartureTime::getDepartureTime)) // Later departure time
-                // Join with the train's assigned depo
-                .join(TrainDepoAssignment.class,
-                        Joiners.equal(departure -> departure.getTrain(), TrainDepoAssignment::getTrain))
-                // Filter where the route's last station is NOT the assigned depo station
-                .filter((departure, trainDepoAssignment) -> {
-                    List<Station> stations = departure.getRoute().getStations();
-                    Station lastStation = stations.get(stations.size() - 1); // Get the last station of the trip's route
-                    return !lastStation.equals(trainDepoAssignment.getDepo().getStation());
-                })
-                .penalize(HardSoftScore.ONE_HARD)
-                .asConstraint("Train must end at assigned depo");
-    }
-
-    /**
-     * **Hard Constraint:** A minimum time interval must be maintained between departures of different trains
-     * from the same station.
-     * This constraint prevents two distinct {@link Train}s from departing from the same {@link Station}
-     * within a specified minimum time buffer, ensuring operational safety and preventing platform congestion.
-     * <p>
-     * **Implementation Detail:**
-     * 1. It uses `forEachUniquePair` to compare every unique pair of {@link DepartureTime} instances.
-     * 2. Pairs are initially matched if they share the same {@link Station}.
-     * 3. Further filtering ensures both departures have assigned trains and times, and that the trains are different.
-     * 4. It calculates the absolute duration between the departure times of the two trains.
-     * 5. It penalizes if this duration is less than a predefined minimum interval (currently 5 minutes).
-     * </p>
-     * **Scoring:** Penalizes {@code 1 Hard} for each pair of trains violating the minimum interval rule.
-     *
-     * @param constraintFactory The {@link ConstraintFactory} to build the constraint.
-     * @return A {@link Constraint} enforcing minimum interval between trains at the same station.
-     */
-    protected Constraint minIntervalBetweenTrains(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEachUniquePair(DepartureTime.class,
-                        Joiners.equal(DepartureTime::getStation), // Match pairs of departures at the same station
-                        // Filter to ensure both departures have assigned trains and times, and are different trains
-                        Joiners.filtering((d1, d2) -> d1.getTrain() != null && d2.getTrain() != null
-                                && !d1.getTrain().equals(d2.getTrain()) // Ensure different trains
-                                && d1.getDepartureTime() != null && d2.getDepartureTime() != null))
-                .filter((d1, d2) -> {
-                    Duration interval = Duration.between(d1.getDepartureTime(), d2.getDepartureTime()).abs();
-                    // Penalize if the interval is less than 5 minutes
-                    return interval.toMinutes() < 5;
-                })
-                .penalize(HardSoftScore.ONE_HARD)
-                .asConstraint("Minimum interval between trains");
-    }
-
-    /**
-     * **Hard Constraint:** A single {@link Train} cannot have overlapping trips.
-     * This constraint ensures that a train, once assigned to a {@link DepartureTime},
-     * has sufficient time to complete its current route before starting another assigned route.
-     * <p>
-     * **Implementation Detail:**
-     * Uses minutes from midnight for correct time arithmetic (handles potential midnight crossing).
-     * </p>
-     * **Scoring:** Penalizes {@code 1 Hard} for each pair of overlapping trips for the same train.
-     *
-     * @param constraintFactory The {@link ConstraintFactory} to build the constraint.
-     * @return A {@link Constraint} preventing overlapping trips for the same train.
-     */
-    protected Constraint trainRouteConsistency(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEachUniquePair(DepartureTime.class,
-                        Joiners.equal(DepartureTime::getTrain)) // Match pairs of departures assigned to the same train
-                .filter((d1, d2) -> d1.getTrain() != null
-                        && d1.getDepartureTime() != null && d2.getDepartureTime() != null
-                        && d1.getRoute() != null && d2.getRoute() != null)
-                .filter((d1, d2) -> {
-                    // Convert to minutes from midnight for correct arithmetic
-                    int d1StartMinutes = d1.getDepartureTime().getHour() * 60 + d1.getDepartureTime().getMinute();
-                    int d2StartMinutes = d2.getDepartureTime().getHour() * 60 + d2.getDepartureTime().getMinute();
-                    
-                    // Estimate trip duration: 3 minutes per station
-                    int d1Duration = d1.getRoute().getStations().size() * 3;
-                    int d2Duration = d2.getRoute().getStations().size() * 3;
-                    
-                    int d1EndMinutes = d1StartMinutes + d1Duration;
-                    int d2EndMinutes = d2StartMinutes + d2Duration;
-
-                    // Check for overlap: Two trips overlap if one starts before the other ends
-                    boolean d1BeforeD2 = d1EndMinutes <= d2StartMinutes;
-                    boolean d2BeforeD1 = d2EndMinutes <= d1StartMinutes;
-
-                    // Conflict if neither trip is entirely before the other (i.e., they overlap)
-                    return !d1BeforeD2 && !d2BeforeD1;
-                })
-                .penalize(HardSoftScore.ONE_HARD)
-                .asConstraint("Train route consistency");
-    }
-
-    /**
-     * **Hard Constraint:** A {@link Train} must be able to physically travel between CONSECUTIVE trips.
-     * The last station of the previous trip must equal the first station of the next trip.
-     * <p>
-     * **Implementation Detail:**
-     * Checks only consecutive trips (where there's no other trip in between for the same train).
-     * </p>
-     * **Scoring:** Penalizes {@code 1 Hard} for each pair of consecutive trips where the train
-     * cannot physically travel from the end of one to the start of the next.
-     *
-     * @param constraintFactory The {@link ConstraintFactory} to build the constraint.
-     * @return A {@link Constraint} ensuring trains can physically travel between consecutive trips.
-     */
-    protected Constraint trainContinuity(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEachUniquePair(DepartureTime.class,
-                        Joiners.equal(DepartureTime::getTrain))
-                .filter((d1, d2) -> d1.getTrain() != null
-                        && d1.getDepartureTime() != null && d2.getDepartureTime() != null
-                        && d1.getRoute() != null && d2.getRoute() != null)
-                // Only check consecutive trips - no trip in between
-                .ifNotExists(DepartureTime.class,
-                        Joiners.equal((d1, d2) -> d1.getTrain(), DepartureTime::getTrain),
-                        Joiners.filtering((d1, d2, middle) -> {
-                            if (middle.getDepartureTime() == null) return false;
-                            if (middle.equals(d1) || middle.equals(d2)) return false;
-                            
-                            int d1Minutes = d1.getDepartureTime().getHour() * 60 + d1.getDepartureTime().getMinute();
-                            int d2Minutes = d2.getDepartureTime().getHour() * 60 + d2.getDepartureTime().getMinute();
-                            int middleMinutes = middle.getDepartureTime().getHour() * 60 + middle.getDepartureTime().getMinute();
-                            
-                            int earlier = Math.min(d1Minutes, d2Minutes);
-                            int later = Math.max(d1Minutes, d2Minutes);
-                            
-                            // Check if middle trip is strictly between the two
-                            return middleMinutes > earlier && middleMinutes < later;
-                        }))
-                .filter((d1, d2) -> {
-                    // Convert to minutes from midnight
-                    int d1StartMinutes = d1.getDepartureTime().getHour() * 60 + d1.getDepartureTime().getMinute();
-                    int d2StartMinutes = d2.getDepartureTime().getHour() * 60 + d2.getDepartureTime().getMinute();
-                    
-                    // Determine which trip comes first chronologically
-                    DepartureTime first = d1StartMinutes <= d2StartMinutes ? d1 : d2;
-                    DepartureTime second = d1StartMinutes <= d2StartMinutes ? d2 : d1;
-                    int firstStartMinutes = Math.min(d1StartMinutes, d2StartMinutes);
-                    int secondStartMinutes = Math.max(d1StartMinutes, d2StartMinutes);
-
-                    // Calculate end time of first trip in minutes (3 min per station)
-                    int firstDuration = first.getRoute().getStations().size() * 3;
-                    int firstEndMinutes = firstStartMinutes + firstDuration;
-
-                    // If trips overlap in time, that's handled by trainRouteConsistency constraint
-                    if (firstEndMinutes > secondStartMinutes) {
-                        return false; // Skip - overlap is caught elsewhere
-                    }
-
-                    // Get last station of first trip and first station of second trip
-                    List<Station> firstRouteStations = first.getRoute().getStations();
-                    Station lastStationOfFirst = firstRouteStations.get(firstRouteStations.size() - 1);
-                    
-                    List<Station> secondRouteStations = second.getRoute().getStations();
-                    Station firstStationOfSecond = secondRouteStations.get(0);
-
-                    // Penalize if train cannot physically transition (not at same station)
-                    return !lastStationOfFirst.equals(firstStationOfSecond);
-                })
-                .penalize(HardSoftScore.ONE_HARD)
-                .asConstraint("Train continuity - must be at correct station");
-    }
-
-    /**
-     * **Hard Constraint:** The first trip of a {@link Train} for the day must originate from its assigned depot.
-     * This constraint ensures that trains begin their daily service from their designated {@link Depo}.
-     * <p>
-     * **Implementation Detail:**
-     * 1. It iterates through all {@link DepartureTime} instances.
-     * 2. It uses `ifNotExists` to identify, for each train, the {@code DepartureTime} that represents
-     *    its *first* trip of the day (i.e., there is no other trip for the same train with an earlier departure time).
-     * 3. It then joins with {@link TrainDepoAssignment} to find the depot assigned to that specific train.
-     * 4. Finally, it filters for cases where the first station of the trip's {@link Route}
-     *    does *not* match the train's assigned depot station.
-     * </p>
-     * **Scoring:** Penalizes {@code 1 Hard} for each train whose first trip does not start at its assigned depot.
-     *
-     * @param constraintFactory The {@link ConstraintFactory} to build the constraint.
-     * @return A {@link Constraint} ensuring trains start their day at their assigned depot.
+     * Uses ifNotExists to find trips with no earlier trip for the same train.
      */
     protected Constraint trainStartsAtDepo(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(DepartureTime.class)
-                .filter(departure -> departure.getTrain() != null
-                        && departure.getDepartureTime() != null
-                        && departure.getRoute() != null)
-                // Filter for the *first* trip of the day for each train:
-                // only consider if there's no earlier trip for this train
-                .ifNotExists(DepartureTime.class,
-                        Joiners.equal(DepartureTime::getTrain), // Same train
-                        Joiners.lessThan(DepartureTime::getDepartureTime)) // Earlier departure time
-                // Join with the train's assigned depo
+        return constraintFactory.forEach(RouteDeparture.class)
+                .filter(rd -> rd.getTrain() != null && rd.getDepartureTime() != null)
+                // Find the first trip for this train (no earlier trip exists)
+                .ifNotExists(RouteDeparture.class,
+                        Joiners.equal(RouteDeparture::getTrain),
+                        Joiners.lessThan(RouteDeparture::getDepartureTime))
+                // Join with depot assignment
                 .join(TrainDepoAssignment.class,
-                        Joiners.equal(departureTime -> departureTime.getTrain(), TrainDepoAssignment::getTrain))
-                // Filter where the route's first station is NOT the assigned depo station
-                .filter((departure, trainDepoAssignment) -> {
-                    Station firstStationOfRoute = departure.getRoute().getStations().get(0); // Get the first station of the trip's route
-                    return !firstStationOfRoute.equals(trainDepoAssignment.getDepo().getStation());
+                        Joiners.equal(RouteDeparture::getTrain, TrainDepoAssignment::getTrain))
+                // Check if first station matches depot
+                .filter((rd, depoAssignment) -> {
+                    Station firstStation = rd.getFirstStation();
+                    Station depoStation = depoAssignment.getDepo().getStation();
+                    return firstStation != null && !firstStation.equals(depoStation);
                 })
                 .penalize(HardSoftScore.ONE_HARD)
-                .asConstraint("Train must start at assigned depo");
+                .asConstraint("Train must start at assigned depot");
+    }
+
+    /**
+     * Hard Constraint: The last trip of a train must end at its assigned depot.
+     *
+     * Uses ifNotExists to find trips with no later trip for the same train.
+     */
+    protected Constraint trainEndsAtDepo(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(RouteDeparture.class)
+                .filter(rd -> rd.getTrain() != null && rd.getDepartureTime() != null)
+                // Find the last trip for this train (no later trip exists)
+                .ifNotExists(RouteDeparture.class,
+                        Joiners.equal(RouteDeparture::getTrain),
+                        Joiners.greaterThan(RouteDeparture::getDepartureTime))
+                // Join with depot assignment
+                .join(TrainDepoAssignment.class,
+                        Joiners.equal(RouteDeparture::getTrain, TrainDepoAssignment::getTrain))
+                // Check if last station matches depot
+                .filter((rd, depoAssignment) -> {
+                    Station lastStation = rd.getLastStation();
+                    Station depoStation = depoAssignment.getDepo().getStation();
+                    return lastStation != null && !lastStation.equals(depoStation);
+                })
+                .penalize(HardSoftScore.ONE_HARD)
+                .asConstraint("Train must end at assigned depot");
+    }
+
+    /**
+     * Hard Constraint: A train cannot have overlapping trips.
+     *
+     * Two trips for the same train must not overlap in time.
+     */
+    protected Constraint noOverlappingTrips(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEachUniquePair(RouteDeparture.class,
+                        Joiners.equal(RouteDeparture::getTrain),
+                        Joiners.filtering((rd1, rd2) ->
+                                rd1.getTrain() != null &&
+                                rd1.getDepartureTime() != null &&
+                                rd2.getDepartureTime() != null))
+                .filter(RouteDeparture::overlaps)
+                .penalize(HardSoftScore.ONE_HARD)
+                .asConstraint("No overlapping trips for same train");
+    }
+
+    /**
+     * Hard Constraint: Consecutive trips must connect properly.
+     *
+     * For the same train, the last station of one trip must equal
+     * the first station of the next trip (train can't teleport).
+     */
+    protected Constraint trainContinuity(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEachUniquePair(RouteDeparture.class,
+                        Joiners.equal(RouteDeparture::getTrain))
+                .filter((rd1, rd2) -> rd1.getTrain() != null &&
+                        rd1.getDepartureTime() != null && rd2.getDepartureTime() != null)
+                // Check only consecutive trips (no trip in between)
+                .ifNotExists(RouteDeparture.class,
+                        Joiners.equal((rd1, rd2) -> rd1.getTrain(), RouteDeparture::getTrain),
+                        Joiners.filtering((rd1, rd2, middle) -> {
+                            if (middle.getDepartureTime() == null) return false;
+                            if (middle.equals(rd1) || middle.equals(rd2)) return false;
+
+                            int rd1Min = toMinutes(rd1);
+                            int rd2Min = toMinutes(rd2);
+                            int middleMin = toMinutes(middle);
+
+                            int earlier = Math.min(rd1Min, rd2Min);
+                            int later = Math.max(rd1Min, rd2Min);
+
+                            return middleMin > earlier && middleMin < later;
+                        }))
+                .filter((rd1, rd2) -> {
+                    // Determine which is first chronologically
+                    RouteDeparture first = toMinutes(rd1) <= toMinutes(rd2) ? rd1 : rd2;
+                    RouteDeparture second = toMinutes(rd1) <= toMinutes(rd2) ? rd2 : rd1;
+
+                    // Skip if trips overlap (handled by other constraint)
+                    if (first.overlaps(second)) {
+                        return false;
+                    }
+
+                    // Check if first trip can be followed by second
+                    return !first.canBeFollowedBy(second);
+                })
+                .penalize(HardSoftScore.ONE_HARD)
+                .asConstraint("Train continuity - trips must connect");
+    }
+
+    /**
+     * Hard Constraint: Minimum interval between different trains at the same station.
+     *
+     * Prevents platform congestion by ensuring trains don't depart from
+     * the same station within MIN_INTERVAL_MINUTES of each other.
+     */
+    protected Constraint minIntervalBetweenDepartures(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEachUniquePair(RouteDeparture.class,
+                        // Match trips starting from the same station
+                        Joiners.equal(RouteDeparture::getFirstStation))
+                .filter((rd1, rd2) -> rd1.getTrain() != null && rd2.getTrain() != null &&
+                        !rd1.getTrain().equals(rd2.getTrain()) &&
+                        rd1.getDepartureTime() != null && rd2.getDepartureTime() != null)
+                .filter((rd1, rd2) -> {
+                    Duration interval = Duration.between(
+                            rd1.getDepartureTime(),
+                            rd2.getDepartureTime()).abs();
+                    return interval.toMinutes() < MIN_INTERVAL_MINUTES;
+                })
+                .penalize(HardSoftScore.ONE_HARD)
+                .asConstraint("Minimum interval between departures");
+    }
+
+    /**
+     * Hard Constraint: Train capacity must not be exceeded at any point during the trip.
+     *
+     * Uses the route-wide demand calculation to check maximum passenger load
+     * across all stations on the route.
+     */
+    protected Constraint trainCapacityNotExceeded(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(RouteDeparture.class)
+                .filter(rd -> rd.getTrain() != null && rd.getDepartureTime() != null)
+                .filter(RouteDeparture::exceedsCapacity)
+                .penalize(HardSoftScore.ONE_HARD, RouteDeparture::getCapacityOverflow)
+                .asConstraint("Train capacity not exceeded");
     }
 
     // ========== SOFT CONSTRAINTS ==========
 
     /**
-     * **Soft Constraint:** Maximize the number of passengers picked up at each departure.
-     * This constraint rewards {@link DepartureTime} assignments that correspond to
-     * high passenger demand at the departure station, up to the train's capacity.
-     * The goal is to optimize the schedule to serve as many embarking passengers as possible.
-     * <p>
-     * **Implementation Detail:**
-     * 1. It iterates through all {@link DepartureTime} instances with an assigned train and time.
-     * 2. It joins each {@code DepartureTime} with {@link StationDemand} based on the matching
-     *    station and route, and ensuring the demand's hour matches the departure's hour.
-     * 3. For each matching departure and demand, it calculates a reward. The reward is the
-     *    minimum of the available embarking passengers and the train's capacity, ensuring
-     *    that we only reward for passengers that can actually be transported.
-     * </p>
-     * **Scoring:** Rewards {@code 1 Soft} for each passenger picked up, up to the train's capacity.
+     * Soft Constraint: Maximize passenger pickup across ALL stations on the route.
      *
-     * @param constraintFactory The {@link ConstraintFactory} to build the constraint.
-     * @return A {@link Constraint} rewarding efficient passenger pickup.
+     * Rewards trips based on total embarking passengers across the entire route,
+     * capped by train capacity.
      */
     protected Constraint maximizePassengerPickup(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(DepartureTime.class)
-                .filter(departure -> departure.getTrain() != null && departure.getDepartureTime() != null)
-                .join(StationDemand.class,
-                        Joiners.equal(DepartureTime::getStation, StationDemand::getStation), // Match by station
-                        Joiners.equal(DepartureTime::getRoute, StationDemand::getRoute))     // Match by route
-                .filter((departure, demand) ->
-                        // Ensure the demand hour matches the departure hour
-                        departure.getDepartureTime().getHour() == demand.getTime().getHour())
+        return constraintFactory.forEach(RouteDeparture.class)
+                .filter(rd -> rd.getTrain() != null && rd.getDepartureTime() != null)
                 .reward(HardSoftScore.ONE_SOFT,
-                        (departure, demand) -> {
-                            int availablePassengers = demand.getEmbarkingPassengers(departure.getDepartureTime());
-                            int trainCapacity = departure.getTrain().getCapacity();
-                            // Reward picking up passengers, capped by the train's capacity.
-                            // We can't pick up more passengers than available or than the train can hold.
-                            return Math.min(availablePassengers, trainCapacity);
+                        rd -> {
+                            int totalPassengers = rd.getTotalEmbarkingPassengers();
+                            int capacity = rd.getTrain().getCapacity();
+                            // Reward for passengers picked up, capped by capacity
+                            return Math.min(totalPassengers, capacity);
                         })
                 .asConstraint("Maximize passenger pickup");
     }
 
     /**
-     * **Soft Constraint:** Minimize empty or underutilized train trips.
-     * This constraint penalizes {@link DepartureTime} assignments where a {@link Train}
-     * departs with significantly fewer passengers than its capacity, indicating an inefficient use
-     * of resources. The goal is to avoid scheduling trains that are largely empty.
-     * <p>
-     * **Implementation Detail:**
-     * 1. It iterates through all {@link DepartureTime} instances with an assigned train and time.
-     * 2. It joins each {@code DepartureTime} with {@link StationDemand} based on matching
-     *    station, route, and hour.
-     * 3. It filters for cases where the number of embarking passengers is less than 20%
-     *    of the train's total capacity, identifying "underutilized" trips.
-     * 4. For each such underutilized trip, it applies a penalty proportional to the
-     *    difference between the train's capacity and the actual embarking passengers.
-     * </p>
-     * **Scoring:** Penalizes {@code 1 Soft} for each unit of unused capacity in an underutilized train trip.
+     * Soft Constraint: Penalize underutilized trips.
      *
-     * @param constraintFactory The {@link ConstraintFactory} to build the constraint.
-     * @return A {@link Constraint} penalizing empty or underutilized train trips.
+     * Discourages scheduling trips where total embarking passengers across
+     * the route are less than UNDERUTILIZATION_THRESHOLD of train capacity.
      */
-    protected Constraint minimizeEmptyTrainTrips(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(DepartureTime.class)
-                .filter(departure -> departure.getTrain() != null && departure.getDepartureTime() != null)
-                .join(StationDemand.class,
-                        Joiners.equal(DepartureTime::getStation, StationDemand::getStation), // Match by station
-                        Joiners.equal(DepartureTime::getRoute, StationDemand::getRoute),     // Match by route
-                        // Filter to ensure the demand hour matches the departure hour
-                        Joiners.filtering((departure, demand) ->
-                                departure.getDepartureTime().getHour() == demand.getTime().getHour()))
-                .filter((departure, demand) -> {
-                    int capacity = departure.getTrain().getCapacity();
-                    int passengers = demand.getEmbarkingPassengers();
-                    // Identify underutilized trips: if embarking passengers are less than 20% of capacity.
-                    return passengers < capacity * 0.2;
+    protected Constraint minimizeUnderutilizedTrips(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(RouteDeparture.class)
+                .filter(rd -> rd.getTrain() != null && rd.getDepartureTime() != null)
+                .filter(rd -> {
+                    int totalPassengers = rd.getTotalEmbarkingPassengers();
+                    int capacity = rd.getTrain().getCapacity();
+                    return totalPassengers < capacity * UNDERUTILIZATION_THRESHOLD;
                 })
                 .penalize(HardSoftScore.ONE_SOFT,
-                        (departure, demand) -> departure.getTrain().getCapacity() - demand.getEmbarkingPassengers())
-                .asConstraint("Minimize empty train trips");
+                        rd -> rd.getTrain().getCapacity() - rd.getTotalEmbarkingPassengers())
+                .asConstraint("Minimize underutilized trips");
     }
 
+    // ========== HELPER METHODS ==========
+
     /**
-     * **Soft Constraint:** Prefer train departures that align with peak passenger demand.
-     * This constraint rewards scheduling {@link DepartureTime}s such that trains depart
-     * closer to when passenger demand has accumulated within a given hour. The goal is
-     * to provide service when it's most needed by passengers.
-     * <p>
-     * **Implementation Detail:**
-     * 1. It iterates through all {@link DepartureTime} instances with an assigned train and time.
-     * 2. It joins each {@code DepartureTime} with {@link StationDemand} based on matching
-     *    station and route.
-     * 3. It filters to ensure the departure hour matches the demand hour.
-     * 4. A reward is calculated based on the {@link StationDemand#getEmbarkingPassengers()}
-     *    and the minute within the hour of the departure. The later in the hour a train departs,
-     *    the higher the reward, assuming more passengers have accumulated over that hour.
-     *    The reward is scaled by `(minute + 1) / 60` to represent the fraction of accumulated
-     *    passengers within the hour.
-     * </p>
-     * **Scoring:** Rewards {@code 1 Soft} proportionally to the number of accumulated passengers
-     * at the departure minute within the demand hour.
-     *
-     * @param constraintFactory The {@link ConstraintFactory} to build the constraint.
-     * @return A {@link Constraint} rewarding departures that match peak passenger demand.
+     * Converts a RouteDeparture's time to minutes from midnight for comparison.
      */
-    protected Constraint preferOnTimeArrivals(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(DepartureTime.class)
-                .filter(departure -> departure.getTrain() != null && departure.getDepartureTime() != null)
-                .join(StationDemand.class,
-                        Joiners.equal(DepartureTime::getStation, StationDemand::getStation), // Match by station
-                        Joiners.equal(DepartureTime::getRoute, StationDemand::getRoute))     // Match by route
-                .filter((departure, demand) -> {
-                    // Check if departure is within the demand hour
-                    int departureHour = departure.getDepartureTime().getHour();
-                    int demandHour = demand.getTime().getHour();
-                    return departureHour == demandHour;
-                })
-                .reward(HardSoftScore.ONE_SOFT,
-                        (departure, demand) -> {
-                            // Higher reward for departing later in the hour when more passengers
-                            // would have accumulated based on the hourly demand.
-                            int minute = departure.getDepartureTime().getMinute();
-                            int basePassengers = demand.getEmbarkingPassengers();
-                            // Scale reward by how many passengers would have accumulated up to that minute.
-                            // Adding 1 to minute to avoid zero reward at minute 0.
-                            return (basePassengers * (minute + 1)) / 60;
-                        })
-                .asConstraint("Prefer on-time arrivals");
+    private static int toMinutes(RouteDeparture rd) {
+        if (rd.getDepartureTime() == null) return 0;
+        return rd.getDepartureTime().getHour() * 60 + rd.getDepartureTime().getMinute();
     }
 }

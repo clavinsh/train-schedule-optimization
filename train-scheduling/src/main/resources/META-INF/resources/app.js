@@ -172,7 +172,7 @@ function renderSchedule(schedule) {
     // Update stats
     $("#trainCount").text(schedule.trains ? schedule.trains.length : 0);
     $("#routeCount").text(schedule.routes ? schedule.routes.length : 0);
-    $("#departureCount").text(schedule.departureTimes ? schedule.departureTimes.length : 0);
+    $("#departureCount").text(schedule.routeDepartures ? schedule.routeDepartures.length : 0);
     $("#stationCount").text(schedule.stations ? schedule.stations.length : 0);
 
     // Update score
@@ -200,11 +200,11 @@ function renderTrainTimeline(schedule) {
     trainGroupData.clear();
     trainItemData.clear();
 
-    if (!schedule.trains || !schedule.departureTimes) return;
+    if (!schedule.trains || !schedule.routeDepartures) return;
 
     // Create groups for each train with trip count
     schedule.trains.forEach(train => {
-        const assignedTrips = schedule.departureTimes.filter(d => d.train && d.train.id === train.id).length;
+        const assignedTrips = schedule.routeDepartures.filter(d => d.train && d.train.id === train.id).length;
         trainGroupData.add({
             id: train.id,
             content: `<div class="fw-bold"><i class="fas fa-train me-1"></i>Train ${train.id}</div>
@@ -213,7 +213,7 @@ function renderTrainTimeline(schedule) {
     });
 
     // Add "Unassigned" group
-    const unassignedCount = schedule.departureTimes.filter(d => !d.train || !d.departureTime).length;
+    const unassignedCount = schedule.routeDepartures.filter(d => !d.train || !d.departureTime).length;
     trainGroupData.add({
         id: "unassigned",
         content: `<div class="fw-bold text-danger"><i class="fas fa-exclamation-circle me-1"></i>Unassigned (${unassignedCount})</div>`
@@ -228,7 +228,7 @@ function renderTrainTimeline(schedule) {
     }
 
     // Add departure items with realistic trip durations
-    schedule.departureTimes.forEach((departure, idx) => {
+    schedule.routeDepartures.forEach((departure, idx) => {
         const groupId = departure.train ? departure.train.id : "unassigned";
         const routeColor = departure.route ? routeColorMap[departure.route.id] || '#6c757d' : '#6c757d';
         const routeName = departure.route ? departure.route.name : 'Unknown';
@@ -271,7 +271,8 @@ To: ${lastStation}
 Departure: ${departure.departureTime || 'Not set'}
 Arrival: ${departure.departureTime ? formatTime(endTime) : 'N/A'}
 Duration: ${tripDurationMinutes} min (${stationCount} stations)
-Train capacity: ${departure.train ? departure.train.capacity : 'N/A'}`;
+Train capacity: ${departure.train ? departure.train.capacity : 'N/A'}
+Passengers: ${departure.totalEmbarkingPassengers || 0} embarking, max load: ${departure.maxPassengerLoad || 0}`;
 
         trainItemData.add({
             id: departure.id,
@@ -295,14 +296,14 @@ function renderRouteTimeline(schedule) {
     routeGroupData.clear();
     routeItemData.clear();
 
-    if (!schedule.routes || !schedule.departureTimes) return;
+    if (!schedule.routes || !schedule.routeDepartures) return;
 
     // Create groups for each route with trip counts
     schedule.routes.forEach((route, idx) => {
         const color = routeColors[idx % routeColors.length];
         const stationCount = route.stations ? route.stations.length : 0;
-        const tripCount = schedule.departureTimes.filter(d => d.route && d.route.id === route.id).length;
-        const assignedCount = schedule.departureTimes.filter(d => d.route && d.route.id === route.id && d.train && d.departureTime).length;
+        const tripCount = schedule.routeDepartures.filter(d => d.route && d.route.id === route.id).length;
+        const assignedCount = schedule.routeDepartures.filter(d => d.route && d.route.id === route.id && d.train && d.departureTime).length;
 
         // Get first and last station
         let routeRange = '';
@@ -321,7 +322,7 @@ function renderRouteTimeline(schedule) {
     });
 
     // Add departure items grouped by route
-    schedule.departureTimes.forEach((departure, idx) => {
+    schedule.routeDepartures.forEach((departure, idx) => {
         if (!departure.route) return;
 
         const routeIdx = schedule.routes.findIndex(r => r.id === departure.route.id);
@@ -367,7 +368,8 @@ From: ${firstStation}
 To: ${lastStation}
 Departure: ${departure.departureTime || 'Not set'}
 Arrival: ${departure.departureTime ? formatTime(endTime) : 'N/A'}
-Duration: ${tripDurationMinutes} min`;
+Duration: ${tripDurationMinutes} min
+Passengers: ${departure.totalEmbarkingPassengers || 0} embarking, max load: ${departure.maxPassengerLoad || 0}`;
 
         routeItemData.add({
             id: `route-${departure.id}`,
@@ -391,12 +393,12 @@ function renderUnassignedDepartures(schedule) {
     const container = $("#unassignedDepartures");
     container.empty();
 
-    if (!schedule.departureTimes) {
+    if (!schedule.routeDepartures) {
         container.append(createSuccessBanner("No departure data available."));
         return;
     }
 
-    const unassigned = schedule.departureTimes.filter(d => !d.train || !d.departureTime);
+    const unassigned = schedule.routeDepartures.filter(d => !d.train || !d.departureTime);
 
     if (unassigned.length === 0) {
         container.append(createSuccessBanner("All departures have been assigned!"));
@@ -405,7 +407,10 @@ function renderUnassignedDepartures(schedule) {
 
     // Show first 12 unassigned departures
     unassigned.slice(0, 12).forEach(departure => {
-        const stationName = departure.station ? departure.station.name : 'Unknown';
+        // Get first station from route (trip-level model)
+        const firstStation = departure.route && departure.route.stations && departure.route.stations.length > 0
+            ? departure.route.stations[0].name
+            : 'Unknown';
         const routeName = departure.route ? departure.route.name : 'Unknown';
         const missingTrain = !departure.train;
         const missingTime = !departure.departureTime;
@@ -415,7 +420,7 @@ function renderUnassignedDepartures(schedule) {
                 <div class="card h-100 border-danger">
                     <div class="card-body">
                         <h6 class="card-title">
-                            <i class="fas fa-map-marker-alt text-primary me-1"></i>${stationName}
+                            <i class="fas fa-map-marker-alt text-primary me-1"></i>${firstStation}
                         </h6>
                         <p class="card-text small mb-1">
                             <i class="fas fa-route me-1"></i>${routeName}
@@ -651,8 +656,8 @@ function importScheduleJson(event) {
             const schedule = JSON.parse(e.target.result);
 
             // Basic validation
-            if (!schedule.trains || !schedule.routes || !schedule.departureTimes) {
-                showError("Import failed", { statusText: "Invalid schedule format. Must contain trains, routes, and departureTimes." });
+            if (!schedule.trains || !schedule.routes || !schedule.routeDepartures) {
+                showError("Import failed", { statusText: "Invalid schedule format. Must contain trains, routes, and routeDepartures." });
                 return;
             }
 
@@ -664,7 +669,7 @@ function importScheduleJson(event) {
             renderSchedule(schedule);
             refreshSolvingButtons(false);
 
-            showSuccess("Imported!", `Loaded ${schedule.departureTimes.length} departures, ${schedule.trains.length} trains, ${schedule.routes.length} routes.`);
+            showSuccess("Imported!", `Loaded ${schedule.routeDepartures.length} departures, ${schedule.trains.length} trains, ${schedule.routes.length} routes.`);
         } catch (err) {
             showError("Import failed", { statusText: "Invalid JSON: " + err.message });
         }
@@ -678,9 +683,9 @@ function importScheduleJson(event) {
  * Show trip details in a modal when clicking on a timeline item
  */
 function showTripDetails(departureId) {
-    if (!loadedSchedule || !loadedSchedule.departureTimes) return;
+    if (!loadedSchedule || !loadedSchedule.routeDepartures) return;
 
-    const departure = loadedSchedule.departureTimes.find(d => d.id === departureId);
+    const departure = loadedSchedule.routeDepartures.find(d => d.id === departureId);
     if (!departure) return;
 
     const route = departure.route;
@@ -742,18 +747,11 @@ function showTripDetails(departureId) {
         stationsHtml = '<p class="text-muted">No station information available</p>';
     }
 
-    // Calculate estimated passengers - only from first station at departure hour
-    let estimatedPassengers = 0;
-    if (loadedSchedule.stationDemands && departure.departureTime && stations.length > 0) {
-        const departureHour = parseInt(departure.departureTime.split(':')[0], 10);
-        const firstStationId = stations[0].id;
-        const demand = loadedSchedule.stationDemands.find(d => 
-            d.station && d.station.id === firstStationId && 
-            d.route && d.route.id === route.id && 
-            d.time && parseInt(d.time.split(':')[0], 10) === departureHour
-        );
-        estimatedPassengers = demand ? demand.embarkingPassengers : 0;
-    }
+    // Get passenger data from route departure (now includes all stations)
+    const totalEmbarking = departure.totalEmbarkingPassengers || 0;
+    const totalDisembarking = departure.totalDisembarkingPassengers || 0;
+    const maxLoad = departure.maxPassengerLoad || 0;
+    const exceedsCapacity = departure.exceedsCapacity || false;
 
     const modalContent = `
         <div class="row">
@@ -781,7 +779,14 @@ function showTripDetails(departureId) {
 
                 <div class="trip-info-section">
                     <div class="trip-info-label"><i class="fas fa-users me-1"></i> Passengers</div>
-                    <div class="trip-info-value">${estimatedPassengers > 0 ? estimatedPassengers : '~'} expected passengers</div>
+                    <div class="trip-info-value">
+                        <div>${totalEmbarking} embarking total</div>
+                        <div>${totalDisembarking} disembarking total</div>
+                        <div class="${exceedsCapacity ? 'text-danger' : 'text-success'}">
+                            Max load: ${maxLoad}${train ? ` / ${train.capacity}` : ''}
+                            ${exceedsCapacity ? ' ⚠️ Over capacity!' : ''}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -814,7 +819,7 @@ function loadDataset(size) {
         scheduleId = null;
         loadedSchedule = schedule;
         renderSchedule(schedule);
-        showSuccess("Dataset loaded", `Trains: ${schedule.trains.length}, Routes: ${schedule.routes.length}, Trips: ${schedule.departureTimes.length}`);
+        showSuccess("Dataset loaded", `Trains: ${schedule.trains.length}, Routes: ${schedule.routes.length}, Trips: ${schedule.routeDepartures.length}`);
     }).fail(function (xhr) {
         showError("Failed to load dataset", xhr);
     });
@@ -839,7 +844,7 @@ async function runBenchmark() {
         <strong>Problem:</strong> Train Schedule Optimization<br>
         <strong>Trains:</strong> ${loadedSchedule.trains.length}<br>
         <strong>Routes:</strong> ${loadedSchedule.routes.length}<br>
-        <strong>Trips (planning entities):</strong> ${loadedSchedule.departureTimes.length}<br>
+        <strong>Trips (planning entities):</strong> ${loadedSchedule.routeDepartures.length}<br>
         <strong>Stations:</strong> ${loadedSchedule.stations.length}<br>
         <strong>Solving time:</strong> 30 seconds per algorithm
     `;
@@ -1006,7 +1011,7 @@ function exportBenchmarkResults() {
         problem: {
             trains: loadedSchedule.trains.length,
             routes: loadedSchedule.routes.length,
-            departures: loadedSchedule.departureTimes.length,
+            departures: loadedSchedule.routeDepartures.length,
             stations: loadedSchedule.stations.length
         },
         results: benchmarkResults

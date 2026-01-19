@@ -25,8 +25,8 @@ import com.example.domain.*;
  * - Trains with different capacities
  * - Depots at major stations
  * - Hourly passenger demand
- * - Departure times (planning entities)
- * - Available time slots for value range
+ * - Route departures (planning entities) - each represents a potential train trip
+ * - Available time slots for value range (5-minute increments)
  */
 @ApplicationScoped
 public class DemoDataGenerator {
@@ -44,103 +44,28 @@ public class DemoDataGenerator {
      * Prints sample instances from each domain class in the schedule
      */
     public static void printGeneratedData(RollingStockSchedule schedule) {
-        int sampleSize = 3;
-
-        System.out.println("=== GENERATED DEMO DATA ===\n");
-
-        // Configuration
-        TrainConfiguration config = schedule.getConfiguration();
-        System.out.println("--- TrainConfiguration ---");
-        System.out.println("  Min interval between trains: " + config.getMinIntervalBetweenTrains());
-        System.out.println("  Station stop duration: " + config.getStationStopDuration());
-        System.out.println("  Average speed: " + config.getAverageSpeedKmPerHour() + " km/h");
-        System.out.println();
-
-        // Trains
-        System.out.println("--- Trains (showing " + sampleSize + " of " + schedule.getTrains().size() + ") ---");
-        schedule.getTrains().stream().limit(sampleSize).forEach(t ->
-                System.out.println("  Train #" + t.getId() + " - capacity: " + t.getCapacity()));
-        System.out.println();
-
-        // Stations
-        System.out.println("--- Stations (showing " + sampleSize + " of " + schedule.getStations().size() + ") ---");
-        schedule.getStations().stream().limit(sampleSize).forEach(s ->
-                System.out.println("  Station #" + s.getId() + " - " + s.getName() +
-                        " (" + s.getLatitude() + ", " + s.getLongitude() + ")"));
-        System.out.println();
-
-        // Routes
-        System.out.println("--- Routes (showing " + sampleSize + " of " + schedule.getRoutes().size() + ") ---");
-        schedule.getRoutes().stream().limit(sampleSize).forEach(r ->
-                System.out.println("  Route #" + r.getId() + " - " + r.getName() +
-                        " (" + r.getStations().size() + " stations)"));
-        System.out.println();
-
-        // Depos
-        System.out.println("--- Depos (showing " + sampleSize + " of " + schedule.getDepos().size() + ") ---");
-        schedule.getDepos().stream().limit(sampleSize).forEach(d ->
-                System.out.println("  Depo #" + d.getId() + " at " + d.getStation().getName() +
-                        " - capacity: " + d.getCapacity()));
-        System.out.println();
-
-        // TrainDepoAssignments
-        System.out.println("--- TrainDepoAssignments (showing " + sampleSize + " of " +
-                schedule.getTrainDepoAssignments().size() + ") ---");
-        schedule.getTrainDepoAssignments().stream().limit(sampleSize).forEach(a ->
-                System.out.println("  Assignment #" + a.getId() + " - Train #" + a.getTrain().getId() +
-                        " -> " + a.getDepo()));
-        System.out.println();
-
-        // StationDemands
-        System.out.println("--- StationDemands (showing " + sampleSize + " of " +
-                schedule.getStationDemands().size() + ") ---");
-        schedule.getStationDemands().stream().limit(sampleSize).forEach(sd ->
-                System.out.println("  Demand #" + sd.getId() + " - " + sd.getStation().getName() +
-                        " on " + sd.getRoute().getName() + " at " + sd.getTime() +
-                        " (embarking: " + sd.getEmbarkingPassengers() +
-                        ", disembarking: " + sd.getDisembarkingPassengers() + ")"));
-        System.out.println();
-
-        // DepartureTimes
-        System.out.println("--- DepartureTimes (showing " + sampleSize + " of " +
-                schedule.getDepartureTimes().size() + ") ---");
-        // schedule.getDepartureTimes().stream().limit(sampleSize).forEach(dt ->
-        schedule.getDepartureTimes().stream().forEach(dt ->
-                System.out.println("  DepartureTime #" + dt.getId() + " - " + dt.getStation().getName() +
-                        " on " + dt.getRoute().getName() +
-                        " (train: " + (dt.getTrain() != null ? dt.getTrain().getId() : "unassigned") +
-                        ", time: " + (dt.getDepartureTime() != null ? dt.getDepartureTime() : "unassigned") + ")"));
-        System.out.println();
-
-        // Available departure times
-        System.out.println("--- Available Departure Times (showing " + sampleSize + " of " +
-                schedule.getAvailableDepartureTimes().size() + ") ---");
-        schedule.getAvailableDepartureTimes().stream().limit(sampleSize).forEach(t ->
-                System.out.println("  " + t));
-        System.out.println();
-
-        System.out.println("=== END OF DEMO DATA ===");
+        // Debug output disabled - use /schedules/{jobId}/passenger-stats endpoint to view statistics
     }
 
     /**
      * Generates default size dataset
      */
     public static RollingStockSchedule generateDefaultDataset() {
-        return generateDataset(6, 22, 2, 30, 6); // 6 AM to 10 PM, every 2 hours, 5 trains, 6 routes
+        return generateDataset(6, 22, 2, 4, 20); // 6 AM to 10 PM, every 2 hours, 5 trains, 6 routes
     }
 
     /**
      * Generates small dataset for quick testing
      */
     public static RollingStockSchedule generateSmallDataset() {
-        return generateDataset(7, 19, 4, 3, 4); // 7 AM to 7 PM, every 4 hours, 3 trains, 4 routes
+        return generateDataset(7, 19, 4, 4, 5); // 7 AM to 7 PM, every 4 hours, 3 trains, 4 routes
     }
 
     /**
      * Generates large dataset for stress testing
      */
     public static RollingStockSchedule generateLargeDataset() {
-        return generateDataset(6, 22, 2, 8, 8); // 6 AM to 10 PM, every 2 hours, 8 trains, 8 routes
+        return generateDataset(6, 22, 2, 8, 20); // 6 AM to 10 PM, every 2 hours, 8 trains, 8 routes
     }
 
     /**
@@ -175,11 +100,13 @@ public class DemoDataGenerator {
         List<StationDemand> stationDemands = generateStationDemands(stations, routes);
 
         // Create available departure times (value range for planning variable)
+        // Using 5-minute increments for efficiency
         List<LocalTime> availableDepartureTimes = generateAvailableDepartureTimes(startHour, endHour);
 
-        // Create departure times (planning entities)
-        List<DepartureTime> departureTimes = generateDepartureTimes(routes, trains, stationDemands,
-                startHour, endHour, intervalHours);
+        // Create route departures (planning entities)
+        // Each represents a potential trip slot - solver assigns train and time
+        // Pass stationDemands so each departure can calculate route-wide demand
+        List<RouteDeparture> routeDepartures = generateRouteDepartures(routes, stationDemands, startHour, endHour, intervalHours);
 
         RollingStockSchedule schedule = new RollingStockSchedule();
         schedule.setTrains(trains);
@@ -190,19 +117,20 @@ public class DemoDataGenerator {
         schedule.setStationDemands(stationDemands);
         schedule.setConfiguration(configuration);
         schedule.setAvailableDepartureTimes(availableDepartureTimes);
-        schedule.setDepartureTimes(departureTimes);
+        schedule.setRouteDepartures(routeDepartures);
         // score is left null - Timefold will calculate it during solving
         return schedule;
     }
 
     /**
-     * Generate available departure times for the value range provider
-     * Creates time slots every 5 minutes from startHour to endHour
+     * Generate available departure times for the value range provider.
+     * Creates time slots every 5 minutes from startHour to endHour.
+     * 5-minute increments balance precision with search space efficiency.
      */
     private static List<LocalTime> generateAvailableDepartureTimes(int startHour, int endHour) {
         List<LocalTime> times = new ArrayList<>();
         for (int hour = startHour; hour <= endHour; hour++) {
-            for (int minute = 0; minute < 60; minute += 1) {
+            for (int minute = 0; minute < 60; minute += 5) {
                 times.add(LocalTime.of(hour, minute));
             }
         }
@@ -584,58 +512,68 @@ public class DemoDataGenerator {
     }
 
     /**
-     * Generate departure times (planning entities)
+     * Generate route departures (planning entities).
      *
-     * Each DepartureTime represents a TRAIN TRIP - a train starting at the first station
-     * of a route and covering the entire route. Timefold assigns which train runs the trip
-     * and at what time it departs.
+     * Each RouteDeparture represents a potential train trip - running an entire route
+     * from start to end. The solver assigns:
+     * - Which train runs the trip
+     * - What time it departs from the first station
+     *
+     * We create multiple trip slots per route per time block to give the solver
+     * flexibility in scheduling.
+     *
+     * @param routes List of routes to create departures for
+     * @param stationDemands List of all station demands (for building lookup map)
+     * @param startHour First hour of operation (e.g., 6 for 6 AM)
+     * @param endHour Last hour of operation (e.g., 22 for 10 PM)
+     * @param intervalHours Hours between trip slot blocks
+     * @return List of RouteDeparture planning entities (with null train and time - to be assigned by solver)
      */
-    private static List<DepartureTime> generateDepartureTimes(List<Route> routes, List<Train> trains,
+    private static List<RouteDeparture> generateRouteDepartures(List<Route> routes,
             List<StationDemand> stationDemands, int startHour, int endHour, int intervalHours) {
-        List<DepartureTime> departureTimes = new ArrayList<>();
+        List<RouteDeparture> departures = new ArrayList<>();
         long id = 1L;
 
-        // Build lookup: (stationId, routeId) -> (hour -> StationDemand)
-        Map<String, Map<Integer, StationDemand>> demandLookup = new HashMap<>();
-        for (StationDemand demand : stationDemands) {
-            String key = demand.getStation().getId() + "-" + demand.getRoute().getId();
-            demandLookup.computeIfAbsent(key, k -> new HashMap<>())
-                    .put(demand.getTime().getHour(), demand);
-        }
-
-        // Initialize train index for round-robin assignment
-        int trainIndex = 0;
+        // Number of potential trips per route per time block
+        // This gives the solver flexibility - not all slots need to be used
+        int tripsPerBlock = 2;
 
         for (Route route : routes) {
-            for (int stationIndex = 0; stationIndex < route.getStations().size(); stationIndex++) {
-                Station currentStation = route.getStations().get(stationIndex);
-                String lookupKey = currentStation.getId() + "-" + route.getId();
-                Map<Integer, StationDemand> hourlyDemands = demandLookup.getOrDefault(lookupKey, new HashMap<>());
+            // Build route-specific demand lookup (only demands for this specific route)
+            Map<Station, Map<Integer, StationDemand>> routeDemandLookup =
+                    buildDemandLookupForRoute(stationDemands, route);
 
-                // Generate one departure per time slot per station on the route
-                // This represents "we need a train to run this route at approximately this hour, passing through this station"
-                for (int hour = startHour; hour <= endHour; hour += intervalHours) {
-                    DepartureTime departure = new DepartureTime();
-                    departure.setId(id++);
-                    departure.setStation(currentStation);
-                    departure.setRoute(route);
-                    departure.setStationIndexInRoute(stationIndex);
-                    departure.setHourlyDemands(hourlyDemands);
-
-                    // Pre-assign a train and a departure time to reduce initial unassigned variables for CH
-                    departure.setTrain(trains.get(trainIndex));
-                    trainIndex = (trainIndex + 1) % trains.size(); // Round-robin assignment
-
-                    // Assign an initial departure time. Using the start of the hour for simplicity.
-                    // The solver can then adjust this time.
-                    departure.setDepartureTime(LocalTime.of(hour, 0));
-
-                    departureTimes.add(departure);
+            // Create trip slots for each time block
+            for (int hour = startHour; hour <= endHour; hour += intervalHours) {
+                for (int slot = 0; slot < tripsPerBlock; slot++) {
+                    // Create a trip slot with demand lookup populated
+                    RouteDeparture departure = new RouteDeparture(id++, route);
+                    departure.setStationDemandLookup(routeDemandLookup);
+                    departures.add(departure);
                 }
             }
         }
 
-        return departureTimes;
+        return departures;
+    }
+
+    /**
+     * Builds a lookup map from station demands for a specific route: Station -> (Hour -> StationDemand)
+     * Only includes demands that match the given route.
+     */
+    private static Map<Station, Map<Integer, StationDemand>> buildDemandLookupForRoute(
+            List<StationDemand> stationDemands, Route route) {
+        Map<Station, Map<Integer, StationDemand>> lookup = new HashMap<>();
+
+        for (StationDemand demand : stationDemands) {
+            // Only include demand for this specific route
+            if (demand.getRoute() != null && demand.getRoute().getId().equals(route.getId())) {
+                lookup.computeIfAbsent(demand.getStation(), k -> new HashMap<>())
+                        .put(demand.getTime().getHour(), demand);
+            }
+        }
+
+        return lookup;
     }
 
     /**

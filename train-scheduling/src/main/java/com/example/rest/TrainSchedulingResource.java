@@ -5,7 +5,6 @@ import ai.timefold.solver.core.api.score.buildin.hardsoft.HardSoftScore;
 import ai.timefold.solver.core.api.solver.ScoreAnalysisFetchPolicy;
 import ai.timefold.solver.core.api.solver.SolutionManager;
 import ai.timefold.solver.core.api.solver.SolverFactory;
-import ai.timefold.solver.core.api.solver.SolverJob;
 import ai.timefold.solver.core.api.solver.SolverManager;
 import ai.timefold.solver.core.api.solver.SolverStatus;
 import ai.timefold.solver.core.config.solver.SolverConfig;
@@ -42,7 +41,6 @@ import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutionException;
 
 @Tag(name = "Train Scheduling",
         description = "Train scheduling service for optimizing rolling stock assignments")
@@ -113,6 +111,76 @@ public class TrainSchedulingResource {
         return solverManager.getSolverStatus(jobId);
     }
 
+    @Operation(summary = "Get passenger statistics for a schedule")
+    @APIResponses(value = {
+            @APIResponse(responseCode = "200", description = "Passenger statistics",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON)),
+            @APIResponse(responseCode = "404", description = "Schedule not found")})
+    @GET
+    @Path("{jobId}/passenger-stats")
+    @Produces(MediaType.APPLICATION_JSON)
+    public java.util.Map<String, Object> getPassengerStatistics(
+            @Parameter(description = "The job ID") @PathParam("jobId") String jobId) {
+        RollingStockSchedule schedule = getSchedule(jobId);
+
+        java.util.Map<String, Object> stats = new java.util.LinkedHashMap<>();
+        java.util.List<java.util.Map<String, Object>> tripDetails = new java.util.ArrayList<>();
+
+        int totalTrips = 0;
+        int assignedTrips = 0;
+        int tripsWithPassengers = 0;
+        int tripsOverCapacity = 0;
+        int totalPassengers = 0;
+        int totalMaxLoad = 0;
+
+        for (var departure : schedule.getRouteDepartures()) {
+            totalTrips++;
+            if (departure.getTrain() != null && departure.getDepartureTime() != null) {
+                assignedTrips++;
+                int embarking = departure.getTotalEmbarkingPassengers();
+                int disembarking = departure.getTotalDisembarkingPassengers();
+                int maxLoad = departure.getMaxPassengerLoad();
+                boolean overCapacity = departure.exceedsCapacity();
+
+                if (embarking > 0) {
+                    tripsWithPassengers++;
+                    totalPassengers += embarking;
+                }
+
+                totalMaxLoad += maxLoad;
+
+                if (overCapacity) {
+                    tripsOverCapacity++;
+                }
+
+                // Add detailed trip info
+                java.util.Map<String, Object> tripInfo = new java.util.LinkedHashMap<>();
+                tripInfo.put("tripId", departure.getId());
+                tripInfo.put("route", departure.getRoute() != null ? departure.getRoute().getName() : null);
+                tripInfo.put("trainId", departure.getTrain().getId());
+                tripInfo.put("trainCapacity", departure.getTrain().getCapacity());
+                tripInfo.put("departureTime", departure.getDepartureTime() != null ? departure.getDepartureTime().toString() : null);
+                tripInfo.put("totalEmbarkingPassengers", embarking);
+                tripInfo.put("totalDisembarkingPassengers", disembarking);
+                tripInfo.put("maxPassengerLoad", maxLoad);
+                tripInfo.put("exceedsCapacity", overCapacity);
+                tripInfo.put("capacityOverflow", departure.getCapacityOverflow());
+
+                tripDetails.add(tripInfo);
+            }
+        }
+
+        stats.put("totalTrips", totalTrips);
+        stats.put("assignedTrips", assignedTrips);
+        stats.put("tripsWithPassengers", tripsWithPassengers);
+        stats.put("totalPassengersServed", totalPassengers);
+        stats.put("averageLoadPerTrip", assignedTrips > 0 ? totalMaxLoad / assignedTrips : 0);
+        stats.put("tripsOverCapacity", tripsOverCapacity);
+        stats.put("trips", tripDetails);
+
+        return stats;
+    }
+
     @Operation(summary = "Get the score analysis for a schedule")
     @APIResponses(value = {
             @APIResponse(responseCode = "200", description = "The score analysis",
@@ -142,6 +210,10 @@ public class TrainSchedulingResource {
             @Parameter(description = "Algorithm to use: default, tabu, late-acceptance, simulated-annealing")
             @QueryParam("algorithm") String algorithm) {
         String jobId = UUID.randomUUID().toString();
+
+        // Rebuild demand lookup for each RouteDeparture (lost during JSON deserialization)
+        rebuildDemandLookups(schedule);
+
         scheduleMap.put(jobId, schedule);
         jobAlgorithmMap.put(jobId, algorithm != null ? algorithm : "default");
 
@@ -226,9 +298,12 @@ public class TrainSchedulingResource {
     public Response runBenchmark(RollingStockSchedule schedule,
             @Parameter(description = "Time limit in seconds for each algorithm")
             @QueryParam("timeLimit") Integer timeLimitSeconds) {
-        
+
+        // Rebuild demand lookup (lost during JSON deserialization)
+        rebuildDemandLookups(schedule);
+
         LOGGER.info("Starting benchmark with {} trains, {} routes, {} departures",
-                schedule.getTrains().size(), schedule.getRoutes().size(), schedule.getDepartureTimes().size());
+                schedule.getTrains().size(), schedule.getRoutes().size(), schedule.getRouteDepartures().size());
 
         String[] algorithms = {"default", "tabu", "late-acceptance", "simulated-annealing"};
         java.util.List<java.util.Map<String, Object>> results = new java.util.ArrayList<>();
@@ -270,13 +345,45 @@ public class TrainSchedulingResource {
         response.put("problemSize", java.util.Map.of(
                 "trains", schedule.getTrains().size(),
                 "routes", schedule.getRoutes().size(),
-                "departures", schedule.getDepartureTimes().size(),
+                "departures", schedule.getRouteDepartures().size(),
                 "stations", schedule.getStations().size()
         ));
         response.put("results", results);
         response.put("timestamp", java.time.Instant.now().toString());
 
         return Response.ok(response).build();
+    }
+
+    /**
+     * Rebuilds the demand lookup for each RouteDeparture in the schedule.
+     * This is necessary because the lookup is not serialized in JSON (@JsonIgnore),
+     * so it's lost when the schedule is sent from the frontend.
+     */
+    private void rebuildDemandLookups(RollingStockSchedule schedule) {
+        if (schedule.getRouteDepartures() == null || schedule.getStationDemands() == null) {
+            return;
+        }
+
+        for (var routeDeparture : schedule.getRouteDepartures()) {
+            if (routeDeparture.getRoute() == null) continue;
+
+            // Build demand lookup for this route: Station -> (Hour -> StationDemand)
+            java.util.Map<com.example.domain.Station, java.util.Map<Integer, com.example.domain.StationDemand>> lookup =
+                    new java.util.HashMap<>();
+
+            for (var demand : schedule.getStationDemands()) {
+                // Only include demand for this specific route
+                if (demand.getRoute() != null &&
+                    demand.getRoute().getId().equals(routeDeparture.getRoute().getId())) {
+                    lookup.computeIfAbsent(demand.getStation(), k -> new java.util.HashMap<>())
+                            .put(demand.getTime().getHour(), demand);
+                }
+            }
+
+            routeDeparture.setStationDemandLookup(lookup);
+        }
+
+        LOGGER.debug("Rebuilt demand lookups for {} route departures", schedule.getRouteDepartures().size());
     }
 
     /**
@@ -291,21 +398,18 @@ public class TrainSchedulingResource {
         clone.setDepos(original.getDepos());
         clone.setStationDemands(original.getStationDemands());
         
-        // Deep clone departure times to isolate planning variables
-        java.util.List<com.example.domain.DepartureTime> clonedDepartures = new java.util.ArrayList<>();
-        for (com.example.domain.DepartureTime dt : original.getDepartureTimes()) {
-            com.example.domain.DepartureTime clonedDt = new com.example.domain.DepartureTime();
-            clonedDt.setId(dt.getId());
-            clonedDt.setRoute(dt.getRoute());
-            clonedDt.setStation(dt.getStation());
-            clonedDt.setStationIndexInRoute(dt.getStationIndexInRoute());
-            clonedDt.setHourlyDemands(dt.getHourlyDemands());
+        // Deep clone route departures to isolate planning variables
+        java.util.List<com.example.domain.RouteDeparture> clonedDepartures = new java.util.ArrayList<>();
+        for (com.example.domain.RouteDeparture rd : original.getRouteDepartures()) {
+            com.example.domain.RouteDeparture clonedRd = new com.example.domain.RouteDeparture(
+                    rd.getId(), rd.getRoute());
+            clonedRd.setStationDemandLookup(rd.getStationDemandLookup());
             // Reset planning variables
-            clonedDt.setTrain(null);
-            clonedDt.setDepartureTime(null);
-            clonedDepartures.add(clonedDt);
+            clonedRd.setTrain(null);
+            clonedRd.setDepartureTime(null);
+            clonedDepartures.add(clonedRd);
         }
-        clone.setDepartureTimes(clonedDepartures);
+        clone.setRouteDepartures(clonedDepartures);
         
         return clone;
     }

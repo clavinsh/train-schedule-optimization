@@ -12,7 +12,7 @@
     <inheritedSolverBenchmark>
         <solver>
             <solutionClass>com.example.domain.RollingStockSchedule</solutionClass>
-            <entityClass>com.example.domain.DepartureTime</entityClass>
+            <entityClass>com.example.domain.RouteDeparture</entityClass>
             <scoreDirectorFactory>
                 <constraintProviderClass>com.example.solver.TrainScheduleConstraintProvider</constraintProviderClass>
             </scoreDirectorFactory>

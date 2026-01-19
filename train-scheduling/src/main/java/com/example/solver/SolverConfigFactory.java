@@ -12,7 +12,7 @@ import ai.timefold.solver.core.config.heuristic.selector.move.composite.UnionMov
 import ai.timefold.solver.core.config.heuristic.selector.move.generic.ChangeMoveSelectorConfig;
 import ai.timefold.solver.core.config.heuristic.selector.move.generic.SwapMoveSelectorConfig;
 
-import com.example.domain.DepartureTime;
+import com.example.domain.RouteDeparture;
 import com.example.domain.RollingStockSchedule;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -37,7 +37,7 @@ public class SolverConfigFactory {
     public SolverConfig createSolverConfig(String algorithm, boolean forBenchmark) {
         SolverConfig solverConfig = new SolverConfig()
                 .withSolutionClass(RollingStockSchedule.class)
-                .withEntityClasses(DepartureTime.class)
+                .withEntityClasses(RouteDeparture.class)
                 .withScoreDirectorFactory(new ScoreDirectorFactoryConfig()
                         .withConstraintProviderClass(TrainScheduleConstraintProvider.class));
 

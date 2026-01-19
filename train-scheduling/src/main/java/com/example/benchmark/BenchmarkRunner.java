@@ -35,7 +35,7 @@ public class BenchmarkRunner {
         System.out.println("  - Trains: " + problem.getTrains().size());
         System.out.println("  - Routes: " + problem.getRoutes().size());
         System.out.println("  - Stations: " + problem.getStations().size());
-        System.out.println("  - Departure times: " + problem.getDepartureTimes().size());
+        System.out.println("  - Route departures: " + problem.getRouteDepartures().size());
         System.out.println("  - Depos: " + problem.getDepos().size());
         System.out.println();
 

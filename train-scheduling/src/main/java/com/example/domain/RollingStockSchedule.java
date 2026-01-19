@@ -52,9 +52,9 @@ public class RollingStockSchedule {
     @ProblemFactCollectionProperty
     private List<LocalTime> availableDepartureTimes;
 
-    // Planning entities - what Timefold optimizes
+    // Planning entities - what Timefold optimizes (each represents a potential train trip)
     @PlanningEntityCollectionProperty
-    private List<DepartureTime> departureTimes;
+    private List<RouteDeparture> routeDepartures;
 
     // The score calculated by the constraint provider
     @PlanningScore
