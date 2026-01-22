@@ -3,7 +3,7 @@
     xsi:schemaLocation="https://timefold.ai/xsd/benchmark https://timefold.ai/xsd/benchmark/benchmark.xsd">
     
     <benchmarkDirectory>local/benchmarkReport</benchmarkDirectory>
-    <warmUpSecondsSpentLimit>10</warmUpSecondsSpentLimit>
+    <warmUpSecondsSpentLimit>30</warmUpSecondsSpentLimit>
     
     <benchmarkReport>
         <locale>en_US</locale>
@@ -17,7 +17,7 @@
                 <constraintProviderClass>com.example.solver.TrainScheduleConstraintProvider</constraintProviderClass>
             </scoreDirectorFactory>
             <termination>
-                <secondsSpentLimit>60</secondsSpentLimit>
+                <secondsSpentLimit>300</secondsSpentLimit>
             </termination>
             <constructionHeuristic>
                 <constructionHeuristicType>FIRST_FIT_DECREASING</constructionHeuristicType>
